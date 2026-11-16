@@ -51,7 +51,8 @@ jobs:
 
   e2e:
     name: End-to-end (real Chromium, real Kokoro inference)
-    runs-on: ubuntu-latest
+    # Playwright 1.56 cannot install Chromium's system dependencies on Ubuntu 26.04 (today's ubuntu-latest).
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - uses: actions/checkout@v4
