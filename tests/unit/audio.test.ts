@@ -108,3 +108,25 @@ describe('SynthesisQueue', () => {
     expect(aborted).toBe(true);
   });
 });
+
+describe('fastStartSplit', () => {
+  it('leaves short sentences whole', async () => {
+    const { fastStartSplit } = await import('@/audio/fast-start');
+    expect(fastStartSplit('A short sentence.')).toBeNull();
+  });
+  it('splits long sentences at an early clause boundary', async () => {
+    const { fastStartSplit } = await import('@/audio/fast-start');
+    const text = 'Tomato seedlings need steady warmth, before they can be moved outdoors into the long summer beds.';
+    const [head, tail] = fastStartSplit(text)!;
+    expect(head).toBe('Tomato seedlings need steady warmth,');
+    expect(`${head} ${tail}`).toBe(text);
+  });
+  it('falls back to a word boundary near the target length', async () => {
+    const { fastStartSplit } = await import('@/audio/fast-start');
+    const text = 'The quiet garden wakes slowly every morning while dew settles on the broad leaves of the squash plants';
+    const [head, tail] = fastStartSplit(text)!;
+    expect(head.length).toBeGreaterThanOrEqual(20);
+    expect(head.length).toBeLessThanOrEqual(80);
+    expect(`${head} ${tail}`).toBe(text);
+  });
+});

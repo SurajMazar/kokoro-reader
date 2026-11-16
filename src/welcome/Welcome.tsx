@@ -5,6 +5,7 @@ import { request } from '@/shared/messages/bus';
 import { formatBytes } from '@/shared/utils/format';
 import { ModelManagerCard } from '@/ui/components/ModelStatus';
 import { FloatingButtonToggle } from '@/ui/components/PermissionToggle';
+import { WebGpuHint } from '@/ui/components/WebGpuHint';
 import { Button, Card } from '@/ui/components/primitives';
 import { useModelState, useSettings, useTheme } from '@/ui/hooks';
 
@@ -49,6 +50,7 @@ export function Welcome() {
       <p className="mb-3 text-[13px] text-muted">
         Kokoro-82M ({formatBytes(variantDownloadBytes(variant))}) downloads once from Hugging Face and is verified by checksum. You can do it now or let it happen the first time you listen.
       </p>
+      <WebGpuHint settings={settings} update={update} />
       <ModelManagerCard state={model} variantId={settings.variantId} />
 
       <h2 className="mt-8 mb-2 text-[15px] font-semibold">3. Try it</h2>

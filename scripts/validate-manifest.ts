@@ -50,6 +50,9 @@ for (const file of walk(dir)) {
     const text = readFileSync(file, 'utf8');
     need(!/<script[^>]+src=["']https?:/i.test(text), `remote <script> in ${file}`);
     need(!/importScripts\(\s*["']https?:/.test(text), `remote importScripts in ${file}`);
+    // transformers.js depends on the Node-only image library sharp (which has open
+    // advisories); its web build must not pull it into the extension.
+    need(!/from\s*["']sharp["']|require\(["']sharp["']\)|libvips/.test(text), `Node-only dependency "sharp" bundled into ${file}`);
   }
 }
 

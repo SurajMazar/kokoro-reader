@@ -21,6 +21,7 @@ import { ModelManagerCard } from '@/ui/components/ModelStatus';
 import { FloatingButtonToggle } from '@/ui/components/PermissionToggle';
 import { Button, Card, cx, Field, Segmented, Select, Switch } from '@/ui/components/primitives';
 import { VoiceLibrary } from '@/ui/components/VoiceLibrary';
+import { WebGpuHint } from '@/ui/components/WebGpuHint';
 import { useModelState, useSettings, useStored, useTheme, useVoices } from '@/ui/hooks';
 
 const SECTIONS = [
@@ -307,6 +308,7 @@ function EngineSection({ settings, update }: { settings: Settings; update: (patc
   const [model] = useModelState();
   return (
     <>
+      <WebGpuHint settings={settings} update={update} />
       <Group title="Speech engine" description="Kokoro is the primary engine. Browser speech is a separate, clearly labelled fallback that you choose yourself.">
         <Field label="Engine">
           <Segmented label="Engine" value={settings.engine} onChange={(engine) => void update({ engine })} options={[{ value: 'kokoro', label: 'Kokoro AI (local)' }, { value: 'browser', label: 'Browser speech' }]} />
@@ -326,7 +328,7 @@ function EngineSection({ settings, update }: { settings: Settings; update: (patc
           </Select>
         </Field>
         <p className="pb-3 text-[12px] text-muted">{MODEL_VARIANTS.find((v) => v.id === settings.variantId)?.description}</p>
-        <Field label="Execution backend" description="Auto tries WebGPU for fp16/fp32 models and falls back to WebAssembly if it fails a real test inference.">
+        <Field label="Execution backend" description="Auto uses WebGPU for the full-precision model when available (falling back to WebAssembly if it fails a real test inference). The 8-bit and fp16 models always run on WebAssembly.">
           <Segmented label="Backend" value={settings.backend} onChange={(backend) => void update({ backend })} options={[{ value: 'auto', label: 'Auto' }, { value: 'webgpu', label: 'WebGPU' }, { value: 'wasm', label: 'WebAssembly' }]} />
         </Field>
         <Field label="Generate ahead" description="Sentences synthesized before they are needed.">

@@ -1,15 +1,20 @@
 /**
  * Playwright fixtures that load the built extension (dist-e2e) into a real
- * Chromium. The model cache lives in a persistent profile under .cache/, so
- * the 92 MB Kokoro download happens once per machine, not once per test.
+ * Chromium with a fresh profile per test worker. Every run is therefore a
+ * genuine first install: the Kokoro model is downloaded from the pinned
+ * revision and verified once, then shared by all tests in the worker.
+ *
+ * (A reused profile is not safe: Chrome keeps running a previously cached
+ * extension service worker across launches even after the files change.)
  */
 import { test as base, chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import type { ModelState, PlaybackState } from '../../src/shared/types';
 
 const EXTENSION = resolve(import.meta.dirname, '../../dist-e2e');
-const PROFILE = resolve(import.meta.dirname, '../../.cache/e2e-profile');
+export const EXTENSION_PATH = EXTENSION;
 export const SITE = 'http://localhost:4173';
 
 interface Fixtures {
@@ -18,34 +23,40 @@ interface Fixtures {
   extensionId: string;
 }
 
+export function launchWithExtension(profile: string): Promise<BrowserContext> {
+  return chromium.launchPersistentContext(profile, {
+    channel: 'chromium',
+    headless: process.env.HEADED !== '1',
+    viewport: { width: 1280, height: 860 },
+    args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`, '--autoplay-policy=no-user-gesture-required', '--enable-unsafe-webgpu'],
+  });
+}
+
+/** The extension's own service worker (fresh profiles can also run built-in component workers). */
+export async function extensionWorker(context: BrowserContext): Promise<Worker> {
+  const ours = (w: Worker) => w.url().endsWith('/background.js');
+  return context.serviceWorkers().find(ours) ?? (await context.waitForEvent('serviceworker', { predicate: ours }));
+}
+
 export const test = base.extend<{ page: Page; context: BrowserContext }, Fixtures>({
   extContext: [
     async ({}, use) => {
-      mkdirSync(PROFILE, { recursive: true });
-      const context = await chromium.launchPersistentContext(PROFILE, {
-        channel: 'chromium',
-        headless: process.env.HEADED !== '1',
-        viewport: { width: 1280, height: 860 },
-        args: [
-          `--disable-extensions-except=${EXTENSION}`,
-          `--load-extension=${EXTENSION}`,
-          '--autoplay-policy=no-user-gesture-required',
-          '--enable-unsafe-webgpu',
-        ],
-      });
+      const profile = mkdtempSync(join(tmpdir(), 'kokoro-e2e-'));
+      const context = await launchWithExtension(profile);
       await use(context);
       await context.close();
+      rmSync(profile, { recursive: true, force: true });
     },
     { scope: 'worker' },
   ],
   serviceWorker: [
     async ({ extContext }, use) => {
-      let [worker] = extContext.serviceWorkers();
-      worker ??= await extContext.waitForEvent('serviceworker');
+      const worker = await extensionWorker(extContext);
       // On a fresh install the selection content script is registered from
       // onInstalled; pages opened before that will not have it (as in real use).
       for (let i = 0; i < 100; i++) {
-        const registered = await worker.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).length);
+        // Right after a fresh install the worker can briefly run before its extension APIs are bound.
+        const registered = await worker.evaluate(async () => (chrome.scripting ? (await chrome.scripting.getRegisteredContentScripts()).length : 0)).catch(() => 0);
         if (registered) break;
         await new Promise((r) => setTimeout(r, 100));
       }

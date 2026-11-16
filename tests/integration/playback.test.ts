@@ -120,6 +120,29 @@ describe('PlaybackController', () => {
     expect(t.log.map((l) => l.split(':')[1])).toEqual(['One is first.', 'Two is second.', 'Three starts here.', 'Four ends it.']);
   });
 
+  it('fast-starts a long sentence: plays its first clause, then the rest, then moves on', async () => {
+    const t = setup();
+    const long = buildDoc({
+      title: 'Long',
+      source: 'custom',
+      blocks: [{ kind: 'paragraph', text: 'Tomato seedlings need steady warmth, before they can be moved outdoors into the long summer beds. Done.' }],
+    });
+    await t.controller.load('s1', long, 0, config);
+    await t.until((s) => s.status === 'playing');
+    expect(t.log[0]).toBe('af_heart:Tomato seedlings need steady warmth,');
+    t.audio.finish(); // head ends → tail plays, same sentence stays highlighted
+    await t.until(() => t.log.includes('af_heart:before they can be moved outdoors into the long summer beds.'));
+    await new Promise((r) => setTimeout(r, 5));
+    expect(t.last().sentenceIndex).toBe(0);
+    t.audio.finish(); // tail ends → next sentence
+    await t.until((s) => s.sentenceIndex === 1 && s.status === 'playing');
+    // Going back replays the joined sentence from cache, with no new inference.
+    const before = t.log.length;
+    await t.controller.control('previous');
+    await t.until((s) => s.sentenceIndex === 0 && s.status === 'playing');
+    expect(t.log.length).toBe(before);
+  });
+
   it('navigates by sentence and paragraph, and seeks', async () => {
     const t = setup();
     await t.controller.load('s1', doc, 0, config);
@@ -238,11 +261,32 @@ describe('ModelManager backend selection', () => {
     expect(state.error?.code).toBe('E_WEBGPU_UNAVAILABLE');
   });
 
+  it('validation finishes in a settled state (never stuck on "verifying")', async () => {
+    vi.stubGlobal('caches', {
+      open: async () => ({
+        match: async (url: string) => {
+          const path = url.split(/\/resolve\/[0-9a-f]{40}\//)[1]!;
+          return new Response('x', { headers: { 'x-kokoro-sha256': pinnedFile(path).sha256, 'content-length': '1' } });
+        },
+        keys: async () => [],
+        delete: async () => true,
+      }),
+    });
+    const modelStore = await import('@/models/model-store');
+    vi.spyOn(modelStore, 'validateCached').mockResolvedValue(true);
+    const manager = new ModelManager({ onState: () => undefined, hasWebGpu: () => false });
+    await manager.validate('q8');
+    expect(manager.getState().status).toBe('downloaded');
+  });
+
   it('never claims WebGPU just because navigator.gpu exists', () => {
     const manager = new ModelManager({ onState: () => undefined, hasWebGpu: () => true });
     expect(manager.backendOrder(getVariant('q8'), 'auto')).toEqual(['wasm']);
     expect(manager.backendOrder(getVariant('fp32'), 'auto')).toEqual(['webgpu', 'wasm']);
     expect(manager.backendOrder(getVariant('fp32'), 'wasm')).toEqual(['wasm']);
+    // q8 and fp16 produced garbled speech on WebGPU, so even an explicit WebGPU preference keeps them on WASM.
+    expect(manager.backendOrder(getVariant('q8'), 'webgpu')).toEqual(['wasm']);
+    expect(manager.backendOrder(getVariant('fp16'), 'webgpu')).toEqual(['wasm']);
     expect(new ModelManager({ onState: () => undefined, hasWebGpu: () => false }).backendOrder(getVariant('fp32'), 'webgpu')).toEqual(['wasm']);
   });
 

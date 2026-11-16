@@ -1,7 +1,7 @@
 {
   "name": "kokoro-reader",
   "version": "0.1.0",
-  "description": "",
+  "description": "Listen to any webpage with natural AI speech generated locally by Kokoro-82M (ONNX) — a privacy-first Chrome extension.",
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
@@ -16,11 +16,13 @@
     "package": "node scripts/package.ts",
     "icons": "node scripts/render-icons.ts",
     "pin-model": "node scripts/pin-model.ts",
-    "screenshots": "SCREENSHOTS=1 playwright test tests/e2e/screenshots.spec.ts"
+    "screenshots": "SCREENSHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
+    "benchmark": "BENCHMARK=1 playwright test tests/e2e/benchmark.spec.ts",
+    "verify:speech": "QUALITY=1 playwright test tests/e2e/quality.spec.ts && python3 scripts/verify-speech.py"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "private": "true",
   "dependencies": {
@@ -29,8 +31,7 @@
     "lucide-react": "0.544.0",
     "motion": "12.23.24",
     "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "zustand": "5.0.8"
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
     "@eslint/js": "9.38.0",
@@ -58,5 +59,9 @@
   },
   "engines": {
     "node": ">=20.19"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SurajMazar/kokoro-reader.git"
   }
 }

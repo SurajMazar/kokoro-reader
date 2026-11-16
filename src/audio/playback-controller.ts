@@ -18,6 +18,7 @@ import { AppError, toErrorInfo } from '@/shared/errors';
 import { detectLanguage } from '@/shared/text/language';
 import { countWords, WORDS_PER_SECOND_AT_1X } from '@/shared/text/normalize';
 import type { AppErrorInfo, PlaybackState, PlaybackStatus, ReadingDoc } from '@/shared/types';
+import { fastStartSplit } from './fast-start';
 import { concatenate, encodeWav, safeFilename } from './wav';
 import { SynthesisQueue } from './synthesis-queue';
 
@@ -27,6 +28,20 @@ interface Clip {
   samples: Float32Array;
   sampleRate: number;
   seconds: number;
+}
+
+interface Part {
+  url: string;
+  samples: Float32Array;
+  sampleRate: number;
+  seconds: number;
+}
+
+interface PendingTail {
+  index: number;
+  token: number;
+  head: Part;
+  promise: Promise<Part>;
 }
 
 interface Session {
@@ -65,6 +80,8 @@ export class PlaybackController {
   private exportUrl: string | null = null;
   /** Set while this controller pauses the element itself, so the pause listener ignores it. */
   private internalPause = false;
+  /** Second half of a fast-started sentence, played when the first half ends. */
+  private pendingTail: PendingTail | null = null;
 
   constructor(private readonly deps: PlaybackDeps) {
     this.audio = deps.createAudio?.() ?? new Audio();
@@ -285,13 +302,42 @@ export class PlaybackController {
     });
   }
 
+  /** Synthesizes one part of a sentence (fast start). */
+  private synthPart(index: number, part: 'head' | 'tail', text: string, priority: number): Promise<Part> {
+    const s = this.session!;
+    const voice = s.config.voice;
+    const sessionId = s.id;
+    return this.queue.enqueue<Part>({
+      key: `${this.clipKey(index)}:${part}`,
+      priority,
+      run: async (signal) => {
+        const provider = await this.deps.models.ensureReady(s.config.variantId, s.config.backend);
+        const result = await provider.synthesize(text, { voice, speed: 1, signal });
+        if (result.kind !== 'pcm') throw new AppError('E_SYNTHESIS', 'Expected PCM audio');
+        if (this.session?.id !== sessionId || this.session.config.voice !== voice) throw new AppError('E_CANCELLED');
+        const seconds = result.samples.length / result.sampleRate;
+        this.session.generatedSeconds += seconds;
+        this.session.generatedWords += countWords(text);
+        this.deps.onDiagnostic?.('synthesis', {
+          seconds: Math.round(seconds * 100) / 100,
+          inferenceMs: result.inferenceMs,
+          rtf: Math.round((result.inferenceMs / 1000 / Math.max(0.01, seconds)) * 100) / 100,
+          chars: text.length,
+          part,
+        });
+        const wav = encodeWav(result.samples, result.sampleRate);
+        return { url: URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })), samples: result.samples, sampleRate: result.sampleRate, seconds };
+      },
+    });
+  }
+
   /** Keeps the next N sentences generating and frees clips well behind the playhead. */
   private schedule(index: number) {
     const s = this.session;
     if (!s || s.config.engine !== 'kokoro') return;
     const ahead = s.config.prefetchSentences;
     this.queue.rescore((key) => {
-      const sentence = Number(key.split(':').pop());
+      const sentence = Number(key.split(':')[2]);
       if (!key.startsWith(`${s.id}:${s.config.voice}:`) || sentence < index || sentence > index + ahead) return null;
       return sentence - index;
     });
@@ -313,6 +359,7 @@ export class PlaybackController {
     const s = this.session;
     if (!s) return;
     const token = ++this.playToken;
+    this.pendingTail = null;
     this.browserAbort?.abort();
     this.haltAudio();
     if (index >= s.doc.sentences.length) {
@@ -329,16 +376,27 @@ export class PlaybackController {
       return;
     }
 
-    let clip: Clip;
+    let url: string;
     try {
-      clip = await this.requestClip(s.index, -1);
+      const ready = this.clips.has(s.index) || this.queue.has(this.clipKey(s.index));
+      const split = ready ? null : fastStartSplit(s.doc.sentences[s.index]!.text);
+      if (split) {
+        const index = s.index;
+        const head = await this.synthPart(index, 'head', split[0], -3);
+        const promise = this.synthPart(index, 'tail', split[1], -2);
+        promise.catch(() => undefined);
+        this.pendingTail = { index, token, head, promise };
+        url = head.url;
+      } else {
+        url = (await this.requestClip(s.index, -1)).url;
+      }
     } catch (error) {
       if (token === this.playToken) this.fail(error);
       return;
     }
     if (token !== this.playToken || this.session !== s) return;
     this.schedule(s.index);
-    this.audio.src = clip.url;
+    this.audio.src = url;
     this.audio.playbackRate = s.config.rate;
     this.audio.volume = s.config.volume;
     try {
@@ -373,7 +431,51 @@ export class PlaybackController {
   private onClipEnded() {
     const s = this.session;
     if (!s || s.status !== 'playing') return;
+    const pending = this.pendingTail;
+    if (pending && pending.index === s.index && pending.token === this.playToken) {
+      this.pendingTail = null;
+      void this.playTail(pending);
+      return;
+    }
     void this.playFrom(s.index + 1);
+  }
+
+  /** Plays the rest of a fast-started sentence, then caches the whole sentence as one clip. */
+  private async playTail(pending: PendingTail) {
+    const s = this.session!;
+    let tail: Part;
+    try {
+      const settled = await Promise.race([pending.promise, Promise.resolve(null)]);
+      if (!settled) this.setStatus('buffering');
+      tail = await pending.promise;
+    } catch (error) {
+      if (pending.token === this.playToken) this.fail(error);
+      return;
+    }
+    if (pending.token !== this.playToken || this.session !== s) return;
+    this.audio.src = tail.url;
+    this.audio.playbackRate = s.config.rate;
+    this.audio.volume = s.config.volume;
+    try {
+      await this.audio.play();
+    } catch (error) {
+      if (pending.token === this.playToken) this.fail(new AppError('E_PLAYBACK', String(error)));
+      return;
+    }
+    this.setStatus('playing');
+    // Keep the joined sentence so "previous" replays it without new inference.
+    const samples = concatenate([pending.head.samples, tail.samples], tail.sampleRate, 0.03);
+    const wav = encodeWav(samples, tail.sampleRate);
+    if (!this.clips.has(pending.index)) {
+      this.clips.set(pending.index, {
+        index: pending.index,
+        url: URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })),
+        samples,
+        sampleRate: tail.sampleRate,
+        seconds: samples.length / tail.sampleRate,
+      });
+    }
+    for (const part of ['head', 'tail']) this.queue.forget(`${this.clipKey(pending.index)}:${part}`);
   }
 
   private blockStep(direction: 1 | -1): number {

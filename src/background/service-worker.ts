@@ -153,6 +153,7 @@ listen({
     },
     'permissions/sync': async () => syncContentScriptRegistration((await getSettings()).floatingButton),
     'session/doc': async () => (await getActiveSession())?.doc ?? null,
+    'diagnostics/metrics': async () => ((await hasOffscreenDocument()) ? request('offscreen/metrics', {}) : null),
     'bookmark/add': async ({ name }) => {
       const active = await getActiveSession();
       const state = await getPlaybackState();

@@ -65,15 +65,19 @@ export class ModelManager {
   async refresh(variantId: string): Promise<ModelState> {
     const busy = ['downloading', 'verifying', 'initializing'].includes(this.state.status);
     const ready = this.provider?.ready && this.providerVariant === variantId;
-    const status = busy && this.state.variantId === variantId
-      ? this.state.status
-      : ready
-        ? 'ready'
-        : (await this.isDownloaded(variantId))
-          ? 'downloaded'
-          : this.state.status === 'paused' && this.state.variantId === variantId
-            ? 'paused'
-            : 'not-downloaded';
+    const same = this.state.variantId === variantId;
+    // Busy states and errors are only left by an explicit action (download,
+    // initialize, validate, clear), so a status poll never hides an error.
+    const status: ModelState['status'] =
+      same && (busy || this.state.status === 'error')
+        ? this.state.status
+        : ready
+          ? 'ready'
+          : (await this.isDownloaded(variantId))
+            ? 'downloaded'
+            : same && this.state.status === 'paused'
+              ? 'paused'
+              : 'not-downloaded';
     this.set({ variantId, status, cachedBytes: await cachedBytes().catch(() => 0) });
     return this.state;
   }
@@ -155,6 +159,8 @@ export class ModelManager {
       this.set({ status: 'error', error: new AppError('E_MODEL_INTEGRITY', 'Validation found missing or corrupted files').toInfo() });
       return false;
     }
+    // Leave the 'verifying' state before refreshing, or refresh() would treat it as busy and keep it.
+    this.set({ status: this.provider?.ready && this.providerVariant === variantId ? 'ready' : 'downloaded' });
     await this.refresh(variantId);
     return true;
   }
@@ -163,11 +169,10 @@ export class ModelManager {
     await ensureFile(voiceFilePath(voice), signal ?? new AbortController().signal, () => undefined);
   }
 
+  /** Backends to try, best first. A variant never runs on a backend it is not verified for. */
   backendOrder(variant: ModelVariant, preference: BackendPreference): BackendId[] {
-    if (preference === 'wasm') return ['wasm'];
-    const gpu = this.hasWebGpu();
-    if (preference === 'webgpu') return gpu ? ['webgpu', 'wasm'] : ['wasm'];
-    return gpu && variant.backends[0] === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'];
+    if (preference === 'wasm' || !this.hasWebGpu() || !variant.backends.includes('webgpu')) return ['wasm'];
+    return ['webgpu', 'wasm'];
   }
 
   /** Downloads if needed, then initializes the model, falling back from WebGPU to WASM. */

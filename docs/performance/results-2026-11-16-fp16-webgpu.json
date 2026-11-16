@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-16T09:27:07.116Z",
+  "machine": {
+    "platform": "darwin 25.5.0",
+    "cpu": "Apple M4",
+    "cores": 10,
+    "memoryGB": 16
+  },
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "model": "Kokoro-82M v1.0 ONNX, variant fp16, backend preference webgpu",
+  "backend": {
+    "backend": "webgpu",
+    "fellBack": false,
+    "isolated": true,
+    "ms": 2599,
+    "threads": 0,
+    "variant": "fp16"
+  },
+  "modelDownloadMs": 12657,
+  "modelInitMs": [
+    2599
+  ],
+  "timeToFirstAudioMs": {
+    "coldEngine": 4218,
+    "warmEngine": 510
+  },
+  "synthesis": {
+    "sentences": 30,
+    "audioSeconds": 125.3,
+    "inferenceSeconds": 26,
+    "overallRealTimeFactor": 0.21,
+    "rtfMedian": 0.2,
+    "rtfP90": 0.24
+  },
+  "playbackUnderrunsIn60s": 0,
+  "memory": {
+    "offscreenIdleBytes": 851230,
+    "offscreenPlayingBytes": 394880696,
+    "jsHeapPlayingBytes": 11414962
+  }
+}

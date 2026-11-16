@@ -69,8 +69,9 @@ listen({
           await models.clear(variantId);
           break;
         case 'validate':
+          // Report the validation outcome itself (an integrity error stays visible with its recovery action).
           await models.validate(variantId);
-          break;
+          return models.getState();
         case 'initialize':
           void models.ensureReady(variantId, backend).catch(() => undefined);
           break;
@@ -87,6 +88,12 @@ listen({
     'offscreen/export': ({ doc, voice, speed, config }) => player.exportWav(doc, voice, speed, config),
     'offscreen/browser-voices': () => browser.getVoices(),
     'offscreen/parse-article': ({ snapshot }) => articleFromSnapshot(snapshot),
+    'offscreen/metrics': async () => {
+      const measure = (performance as Performance & { measureUserAgentSpecificMemory?: () => Promise<{ bytes: number }> }).measureUserAgentSpecificMemory;
+      const memory = crossOriginIsolated && measure ? await measure.call(performance).catch(() => null) : null;
+      const heap = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+      return { memoryBytes: memory?.bytes ?? null, jsHeapBytes: heap?.usedJSHeapSize ?? null, modelLoaded: models.getState().status === 'ready' };
+    },
   },
 });
 

@@ -7,7 +7,12 @@ export interface ModelVariant {
   dtype: 'q8' | 'fp16' | 'fp32' | 'q4' | 'q4f16';
   file: string;
   description: string;
-  /** Backends this variant is tested on, best first. */
+  /**
+   * Backends this variant produces intelligible speech on, best first.
+   * Verified by transcribing exported audio with Whisper (scripts/verify-speech.py):
+   * q8 and fp16 on WebGPU produced unintelligible audio (WER 100% and 92%) even
+   * though they ran without errors, so they are restricted to WebAssembly.
+   */
   backends: ('webgpu' | 'wasm')[];
 }
 
@@ -33,15 +38,15 @@ export const MODEL_VARIANTS: readonly ModelVariant[] = [
     label: 'Half precision (fp16)',
     dtype: 'fp16',
     file: 'onnx/model_fp16.onnx',
-    description: 'Higher fidelity at twice the size. Runs on WebGPU where supported, otherwise the CPU.',
-    backends: ['webgpu', 'wasm'],
+    description: 'Higher precision on the CPU at twice the download size. (Not used on WebGPU, where it produced garbled audio in testing.)',
+    backends: ['wasm'],
   },
   {
     id: 'fp32',
     label: 'Full precision (fp32)',
     dtype: 'fp32',
     file: 'onnx/model.onnx',
-    description: 'Reference quality. Best with WebGPU; slow on the CPU.',
+    description: 'Reference quality and the only variant that runs correctly on WebGPU, where it is about 4× faster than real time. Slower than 8-bit on the CPU.',
     backends: ['webgpu', 'wasm'],
   },
 ];

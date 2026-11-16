@@ -52,6 +52,13 @@ export interface PageSnapshot {
   language: string;
 }
 
+export interface EngineMetrics {
+  /** Total memory of the offscreen document and its workers (measureUserAgentSpecificMemory), or null. */
+  memoryBytes: number | null;
+  jsHeapBytes: number | null;
+  modelLoaded: boolean;
+}
+
 export interface PageInfo {
   title: string;
   url: string;
@@ -83,6 +90,7 @@ export interface RequestMap {
   'session/doc': [Record<string, never>, ReadingDoc | null];
   'bookmark/add': [{ name?: string }, Bookmark];
   'history/resume': [{ id: string }, null];
+  'diagnostics/metrics': [Record<string, never>, EngineMetrics | null];
 
   // Handled by the offscreen document.
   'offscreen/load': [{ sessionId: string; doc: ReadingDoc; startSentence: number; config: EngineConfig }, null];
@@ -94,6 +102,7 @@ export interface RequestMap {
   'offscreen/export': [{ doc: ReadingDoc; voice: string; speed: number; config: EngineConfig }, ExportResult];
   'offscreen/browser-voices': [Record<string, never>, VoiceInfo[]];
   'offscreen/parse-article': [{ snapshot: PageSnapshot }, ReadingDoc];
+  'offscreen/metrics': [Record<string, never>, EngineMetrics];
   'offscreen/ping': [Record<string, never>, { alive: true; sessionId: string | null }];
 
   // Handled by the content script in a tab.
