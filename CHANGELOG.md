@@ -27,5 +27,7 @@ First release.
 - Optional, clearly labelled browser speech engine.
 
 ### Quality
-- 69 unit and integration tests; 11 end-to-end tests in real Chromium with real inference.
-- Measured performance in `docs/performance/`.
+- 73 unit and integration tests; 11 end-to-end tests in real Chromium with real inference.
+- Measured performance and Whisper-verified speech quality in `docs/performance/`.
+- Walkthrough video in `docs/walkthrough/`.
+- CI/CD: checks and E2E on every push and pull request; every push to main publishes a rolling "latest" pre-release; `v*` tags publish versioned releases.

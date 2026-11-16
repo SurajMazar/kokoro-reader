@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-16T09:21:21.055Z",
+  "date": "2026-11-16T10:00:23.268Z",
   "machine": {
     "platform": "darwin 25.5.0",
     "cpu": "Apple M4",
@@ -12,30 +12,30 @@
     "backend": "wasm",
     "fellBack": false,
     "isolated": true,
-    "ms": 2351,
+    "ms": 2386,
     "threads": 4,
     "variant": "q8"
   },
-  "modelDownloadMs": 8802,
+  "modelDownloadMs": 11872,
   "modelInitMs": [
-    2351
+    2386
   ],
   "timeToFirstAudioMs": {
-    "coldEngine": 5828,
-    "warmEngine": 1541
+    "coldEngine": 6972,
+    "warmEngine": 2289
   },
   "synthesis": {
-    "sentences": 30,
-    "audioSeconds": 125.3,
-    "inferenceSeconds": 119.5,
-    "overallRealTimeFactor": 0.95,
-    "rtfMedian": 0.95,
-    "rtfP90": 0.99
+    "sentences": 25,
+    "audioSeconds": 105.2,
+    "inferenceSeconds": 120.6,
+    "overallRealTimeFactor": 1.15,
+    "rtfMedian": 1.15,
+    "rtfP90": 1.28
   },
-  "playbackUnderrunsIn60s": 1,
+  "playbackUnderrunsIn60s": 10,
   "memory": {
-    "offscreenIdleBytes": 909984,
-    "offscreenPlayingBytes": 339606026,
-    "jsHeapPlayingBytes": 12243396
+    "offscreenIdleBytes": 910390,
+    "offscreenPlayingBytes": 338486675,
+    "jsHeapPlayingBytes": 11406981
   }
 }

@@ -1,9 +1,15 @@
-name: CI
+name: CI/CD
+
+# Pull requests: check, build and package.
+# Pushes to main: the same, then publish the built extension as the rolling
+# "latest" pre-release, so every main commit has an installable ZIP.
+# Tags vX.Y.Z: see release.yml.
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,8 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Typecheck, lint, unit tests, build
+  build:
+    name: Typecheck, lint, test, build, package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,13 +45,14 @@ jobs:
         run: npm run package
       - uses: actions/upload-artifact@v4
         with:
-          name: kokoro-reader-zip
+          name: kokoro-reader-${{ github.sha }}
           path: release/*.zip
+          if-no-files-found: error
 
   e2e:
     name: End-to-end (real Chromium, real Kokoro inference)
     runs-on: ubuntu-latest
-    needs: check
+    needs: build
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,10 +62,44 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build:e2e
-      - name: E2E (downloads the pinned 92 MB model once)
+      - name: E2E (downloads the pinned 92 MB model)
         run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-results
           path: test-results/
+
+  publish-latest:
+    name: Publish "latest" build from main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-latest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kokoro-reader-${{ github.sha }}
+          path: release
+      - name: Replace the rolling "latest" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          zip=$(ls release/*.zip)
+          cp "$zip" release/kokoro-reader-latest.zip
+          short=$(git rev-parse --short HEAD)
+          notes="Automatic build of main at ${short} ($(date -u +%Y-%m-%dT%H:%MZ)).
+
+          Install: unzip, open chrome://extensions, enable Developer mode, click Load unpacked and choose the folder.
+
+          This is a development build. Versioned releases are published from v* tags."
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest "$zip" release/kokoro-reader-latest.zip \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Latest build (main @ ${short})" --notes "$notes"

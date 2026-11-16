@@ -1,0 +1,21 @@
+# Walkthrough chapters
+
+- 00:00 1. Kokoro Reader
+- 00:11 2. Installing the extension
+- 00:20 3. First-time model download
+- 00:38 4. Model initialization
+- 00:49 5. Selecting text on a website
+- 00:53 6. Floating speaker button
+- 00:58 7. Listening to a paragraph
+- 01:24 8. Floating player controls
+- 01:34 9. Changing voice
+- 01:41 10. Adjusting playback speed
+- 01:47 11. Sentence highlighting
+- 01:54 12. Reading an entire article
+- 02:15 13. Distraction-free Smart Reader
+- 02:22 14. Reading queue
+- 02:29 15. Cross-tab playback
+- 02:36 16. Custom text reader
+- 02:42 17. Exporting audio
+- 02:56 18. Settings and privacy
+- 03:04 19. Kokoro Reader

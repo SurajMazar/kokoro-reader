@@ -184,10 +184,19 @@ async function dispose() {
 
 // Requests are processed one at a time; ONNX sessions are not re-entrant.
 let chain: Promise<void> = Promise.resolve();
+const cancelled = new Set<number>();
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const message = event.data;
+  if (message.type === 'cancel') {
+    cancelled.add(message.id);
+    return;
+  }
   chain = chain.then(async () => {
+    if (cancelled.delete(message.id)) {
+      post({ type: 'error', id: message.id, error: new AppError('E_CANCELLED').toInfo() });
+      return;
+    }
     try {
       switch (message.type) {
         case 'init': {

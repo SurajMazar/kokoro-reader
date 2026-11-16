@@ -369,6 +369,8 @@ export class PlaybackController {
       return;
     }
     s.index = Math.max(0, index);
+    // Time to first audio counts from the latest request made before any audio played.
+    if (s.firstAudioAt === null) s.requestedAt = performance.now();
     this.setStatus(this.clips.has(s.index) ? 'playing' : 'buffering');
 
     if (s.config.engine === 'browser') {

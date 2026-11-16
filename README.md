@@ -29,7 +29,7 @@ The model runs in a Web Worker inside an MV3 offscreen document. Text is split i
 | --- | --- | --- |
 | Download | 92 MB | 326 MB |
 | First audio (engine warm) | 1.5 s | 0.5 s |
-| Real-time factor | 0.95 | 0.22 |
+| Real-time factor (lower is faster) | 0.95 idle · 1.15 under heavy CPU load | 0.22 |
 | Speech intelligibility (Whisper WER) | 0 % | 0 % |
 
 Measured on an Apple M4; details and method in [docs/performance](docs/performance/README.md).
@@ -59,6 +59,16 @@ npm run build
 ```
 
 Then load the `dist/` folder with **Load unpacked** as above. Model weights are never committed or bundled; the extension downloads them on first use.
+
+## Walkthrough video
+
+[docs/walkthrough/kokoro-reader-walkthrough.mp4](docs/walkthrough/kokoro-reader-walkthrough.mp4) (3:11, 19 chapters, captions) shows the real extension end to end, narrated by Kokoro itself. How it was recorded: [docs/walkthrough/README.md](docs/walkthrough/README.md).
+
+## Continuous integration and delivery
+
+- Every pull request and every push to `main` runs typecheck, lint, unit tests, the production build with manifest validation, a dependency audit, packaging, and the end-to-end suite in real Chromium ([ci.yml](.github/workflows/ci.yml)).
+- Every push to `main` also publishes the built extension as the rolling **[latest](https://github.com/SurajMazar/kokoro-reader/releases/tag/latest)** pre-release (`kokoro-reader-latest.zip`), so there is always an installable build of `main`.
+- Pushing a `vX.Y.Z` tag (matching `package.json`) builds and publishes a versioned release ([release.yml](.github/workflows/release.yml)).
 
 ## Development
 
@@ -106,6 +116,7 @@ scripts/        manifest, validation, packaging, model pinning, icons, speech ve
 - **WebGPU** is used only with the full-precision model; the 8-bit and fp16 models produced garbled audio on WebGPU in testing, so they always run on the CPU. WebGPU results can vary by GPU and driver; a failed test inference falls back to the CPU automatically.
 - **Pages Chrome protects** (chrome:// pages, the Web Store, other extensions) cannot be read. The built-in PDF viewer cannot be scripted, but *Read with Kokoro* on a selection there still works (without highlighting).
 - **Cross-origin iframes and closed shadow roots** on a page are not extracted; select the text to read it.
+- **CPU speed.** On WebAssembly, Kokoro synthesizes at roughly real time (real-time factor 0.95 on an idle Apple M4, 1.15 under heavy CPU load), so busy machines may pause briefly between sentences. The WebGPU model is about 4× faster.
 - **Highlighting** follows sentences, not individual words.
 - **Speed changes** apply instantly through pitch-preserving playback rate; very high speeds may sound processed.
 - **Import** supports plain text, Markdown and HTML. PDF and Word files must be converted to text first.

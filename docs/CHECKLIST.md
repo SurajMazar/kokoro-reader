@@ -62,4 +62,5 @@ Status of every requirement in the product brief. ✅ done and verified · 🟡 
 | Pinned dependencies and model artifacts; no weights in git | ✅ |
 | Measured performance | ✅ `docs/performance/` |
 | Store listing, permission justifications, privacy policy, screenshots | ✅ |
-| Walkthrough video | see README |
+| Walkthrough video (real recording, Kokoro narration, captions, chapters) | ✅ `docs/walkthrough/` |
+| CI/CD: build on every main push, rolling "latest" pre-release, tagged releases | ✅ |

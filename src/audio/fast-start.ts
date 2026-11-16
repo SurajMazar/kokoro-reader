@@ -5,10 +5,12 @@
  * clause instead of a whole sentence. Highlighting still covers the whole
  * sentence.
  */
-const MIN_HEAD = 20;
-const TARGET_HEAD = 45;
-const MAX_HEAD = 80;
-const MIN_TOTAL = 70;
+// Measured on WebAssembly (RTF ≈ 0.9): a ~32-character clause is ready in
+// about 1.5 s, while a whole 70–120 character sentence takes 3–5 s.
+const MIN_HEAD = 14;
+const TARGET_HEAD = 32;
+const MAX_HEAD = 64;
+const MIN_TOTAL = 56;
 
 export function fastStartSplit(text: string): [string, string] | null {
   if (text.length < MIN_TOTAL) return null;

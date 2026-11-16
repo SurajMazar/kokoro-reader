@@ -25,7 +25,13 @@ export interface WorkerDispose {
   id: number;
 }
 
-export type WorkerRequest = WorkerInit | WorkerSynthesize | WorkerDispose;
+/** Sent outside the job chain: the worker skips that job if it has not started yet. */
+export interface WorkerCancel {
+  type: 'cancel';
+  id: number;
+}
+
+export type WorkerRequest = WorkerInit | WorkerSynthesize | WorkerDispose | WorkerCancel;
 
 export type WorkerResponse =
   | { type: 'ready'; id: number; backend: BackendId; initMs: number; threads: number; crossOriginIsolated: boolean }

@@ -79,7 +79,10 @@ export class KokoroProvider implements TTSProvider {
       signal?.addEventListener(
         'abort',
         () => {
-          if (this.pending.delete(id)) reject(new AppError('E_CANCELLED'));
+          if (!this.pending.delete(id)) return;
+          // Let the worker skip it if it has not started; a running inference finishes and is discarded.
+          worker.postMessage({ type: 'cancel', id } satisfies WorkerRequest);
+          reject(new AppError('E_CANCELLED'));
         },
         { once: true },
       );

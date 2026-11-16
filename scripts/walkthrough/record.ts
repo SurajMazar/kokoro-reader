@@ -14,7 +14,7 @@
  */
 import { chromium, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { CHAPTERS, type Chapter } from './chapters.ts';
@@ -40,17 +40,48 @@ interface SceneRecord {
   reading: ReadingEvent[];
 }
 
-const pageStarts = new Map<string, number>();
-const pageVideos = new Map<string, Page>();
+interface Frame {
+  page: string;
+  t: number;
+  file: string;
+}
 
-async function launch(profile: string, video: boolean): Promise<BrowserContext> {
+const pages = new Map<string, Page>();
+const frames: Frame[] = [];
+/** Which recorded page is in front, from when. Only the front tab paints. */
+const front: { t: number; page: string }[] = [];
+let frameCount = 0;
+
+/**
+ * Captures a page with the DevTools screencast. Unlike Playwright's page
+ * video, every frame carries its wall-clock timestamp, so scenes can be cut
+ * exactly by time.
+ */
+async function capture(context: BrowserContext, page: Page, name: string) {
+  const cdp = await context.newCDPSession(page);
+  cdp.on('Page.screencastFrame', ({ data, metadata, sessionId }) => {
+    const file = resolve(OUT, 'frames', `${String(frameCount++).padStart(6, '0')}.jpg`);
+    writeFileSync(file, Buffer.from(data, 'base64'));
+    frames.push({ page: name, t: Math.round((metadata.timestamp ?? Date.now() / 1000) * 1000), file });
+    void cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => undefined);
+  });
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 90, maxWidth: VIEW.width, maxHeight: VIEW.height, everyNthFrame: 1 });
+}
+
+async function bringFront(name: string) {
+  await pages.get(name)!.bringToFront();
+  front.push({ t: Date.now(), page: name });
+}
+
+async function launch(profile: string): Promise<BrowserContext> {
   const context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: true,
-    viewport: VIEW,
-    deviceScaleFactor: 1,
-    ...(video ? { recordVideo: { dir: resolve(OUT, 'raw'), size: VIEW } } : {}),
-    args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`, '--autoplay-policy=no-user-gesture-required', '--enable-unsafe-webgpu'],
+    // The DevTools screencast captures the real window, not Playwright's emulated
+    // viewport, so size the headless window itself: its page area is the window
+    // height minus 139 px of (invisible) browser chrome.
+    viewport: null,
+    args: [`--window-size=${VIEW.width},${VIEW.height + 139}`, `--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`, '--autoplay-policy=no-user-gesture-required', '--enable-unsafe-webgpu'],
   });
   // A visible cursor, since recorded videos do not include the system pointer.
   await context.addInitScript(() => {
@@ -142,10 +173,20 @@ async function logReading(worker: Worker, ms: number, stop?: (state: { status: s
   return events;
 }
 
+async function waitPlaying(worker: Worker, timeout = 20_000) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    if ((await playback(worker))?.status === 'playing') return;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+}
+
 async function newStage(context: BrowserContext, name: string): Promise<Page> {
   const page = await context.newPage();
-  pageStarts.set(name, Date.now());
-  pageVideos.set(name, page);
+  const size = await page.evaluate(() => [innerWidth, innerHeight]);
+  if (size[0] !== VIEW.width || size[1] !== VIEW.height) throw new Error(`Page area is ${size.join('×')}, expected ${VIEW.width}×${VIEW.height}`);
+  pages.set(name, page);
+  await capture(context, page, name);
   return page;
 }
 
@@ -164,22 +205,27 @@ async function moveTo(page: Page, x: number, y: number) {
 }
 
 async function main() {
-  rmSync(OUT, { recursive: true, force: true });
+  // REUSE_NARRATION=1 keeps the narration from a previous run.
+  const reuse = process.env.REUSE_NARRATION === '1' && existsSync(resolve(OUT, 'narration.json'));
+  for (const dir of reuse ? ['frames', 'reading'] : ['frames', 'reading', 'narration']) rmSync(resolve(OUT, dir), { recursive: true, force: true });
+  mkdirSync(resolve(OUT, 'frames'), { recursive: true });
   mkdirSync(resolve(OUT, 'narration'), { recursive: true });
   mkdirSync(resolve(OUT, 'reading'), { recursive: true });
   const server = spawn('node', [resolve(ROOT, 'tests/fixtures/server.ts')], { stdio: 'ignore' });
   await new Promise((r) => setTimeout(r, 800));
 
   // Phase 1: narration.
+  let narration: Record<string, number> = {};
+  if (reuse) narration = JSON.parse(readFileSync(resolve(OUT, 'narration.json'), 'utf8'));
+  else {
   const prepProfile = mkdtempSync(join(tmpdir(), 'kokoro-walkthrough-prep-'));
-  const prep = await launch(prepProfile, false);
+  const prep = await launch(prepProfile);
   const prepWorker = await extensionWorker(prep);
   const prepId = prepWorker.url().split('/')[2]!;
   const prepPage = await prep.newPage();
   await prepPage.goto(`chrome-extension://${prepId}/options/index.html`);
   await bg(prepPage, 'model/action', { action: 'download' });
   await waitForModel(prepPage, ['downloaded', 'ready']);
-  const narration: Record<string, number> = {};
   for (const chapter of CHAPTERS) {
     if (!chapter.narration) continue;
     narration[chapter.id] = await exportWav(prepPage, chapter.narration, resolve(OUT, 'narration', `${chapter.id}.wav`));
@@ -187,10 +233,12 @@ async function main() {
   }
   await prep.close();
   rmSync(prepProfile, { recursive: true, force: true });
+  writeFileSync(resolve(OUT, 'narration.json'), JSON.stringify(narration));
+  }
 
   // Phase 2: record.
   const profile = mkdtempSync(join(tmpdir(), 'kokoro-walkthrough-'));
-  const context = await launch(profile, true);
+  const context = await launch(profile);
   const worker = await extensionWorker(context);
   const id = worker.url().split('/')[2]!;
   // An unrecorded-in-the-final-cut control page for privileged requests.
@@ -203,8 +251,8 @@ async function main() {
 
   const scenes: SceneRecord[] = [];
   const scene = async (chapter: Chapter, pageName: string, action: (mark: { narrationAt: () => void }) => Promise<ReadingEvent[] | void>, minSeconds = 0) => {
-    const page = pageVideos.get(pageName)!;
-    await page.bringToFront();
+    const page = pages.get(pageName)!;
+    await bringFront(pageName);
     const start = Date.now();
     let narrationOffset = 0.3;
     const reading = (await action({ narrationAt: () => (narrationOffset = (Date.now() - start) / 1000) })) ?? [];
@@ -228,7 +276,7 @@ async function main() {
     await stage.waitForTimeout(600);
     await stage.mouse.wheel(0, 380);
     await stage.waitForTimeout(500);
-    const download = stage.getByRole('button', { name: /^Download/ });
+    const download = stage.getByRole('button', { name: /^Download \d/ });
     const box = await download.boundingBox();
     if (box) await moveTo(stage, box.x + box.width / 2, box.y + box.height / 2);
     await download.click();
@@ -277,7 +325,8 @@ async function main() {
   const player = { next: { x: 1042, y: 670 }, play: { x: 1003, y: 670 }, nextBlock: { x: 1073, y: 670 } };
   await scene(ch('08-controls'), 'article', async () => {
     await bg(control, 'tab/read', { tabId, mode: 'page', startSentence: 6 });
-    await article.waitForTimeout(2500);
+    await waitPlaying(worker);
+    await article.waitForTimeout(800);
     await moveTo(article, player.next.x, player.next.y);
     await article.mouse.click(player.next.x, player.next.y);
     await article.waitForTimeout(1500);
@@ -326,7 +375,7 @@ async function main() {
     await moveTo(stage, box.x + box.width / 2, box.y + box.height / 2);
     await stage.waitForTimeout((narration['12-article'] ?? 2) * 1000 + 400);
     await read.click();
-    await article.bringToFront();
+    await bringFront('article');
     await article.evaluate(() => scrollTo({ top: 0 }));
     return logReading(worker, 16_000);
   });
@@ -337,8 +386,8 @@ async function main() {
     const opened = context.waitForEvent('page', (p) => p.url().includes('/reader/'));
     await bg(control, 'reader/open', { tabId });
     const reader = await opened;
-    pageStarts.set('reader', Date.now());
-    pageVideos.set('reader', reader);
+    pages.set('reader', reader);
+    await capture(context, reader, 'reader');
     await reader.waitForLoadState();
     await scene(ch('13-smart-reader'), 'reader', async () => {
       await reader.waitForTimeout(900);
@@ -408,17 +457,14 @@ async function main() {
     }
   }
 
-  const videos: Record<string, string> = {};
-  for (const [name, page] of pageVideos) {
-    videos[name] = (await page.video()?.path()) ?? '';
-  }
+  const diagnostics = await control.evaluate(async () => (await chrome.storage.local.get('diagnostics')).diagnostics);
   await context.close();
   rmSync(profile, { recursive: true, force: true });
   server.kill();
 
   writeFileSync(
     resolve(OUT, 'timeline.json'),
-    JSON.stringify({ view: VIEW, narration, pageStarts: Object.fromEntries(pageStarts), videos, scenes }, null, 2),
+    JSON.stringify({ view: VIEW, narration, scenes, front, frames, diagnostics }, null, 2),
   );
   console.log(`Timeline written to ${resolve(OUT, 'timeline.json')}`);
 }
