@@ -8,7 +8,6 @@ import {
   Keyboard,
   Settings as SettingsIcon,
   Shield,
-  Sliders,
   Volume2,
   Wrench,
 } from 'lucide-react';

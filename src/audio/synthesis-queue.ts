@@ -90,12 +90,17 @@ export class SynthesisQueue {
     entry
       .run(entry.abort.signal)
       .then(
-        (value) => (entry.abort.signal.aborted ? entry.reject(new AppError('E_CANCELLED')) : entry.resolve(value)),
-        (error) => entry.reject(error),
+        (value) => {
+          if (entry.abort.signal.aborted) throw new AppError('E_CANCELLED');
+          entry.resolve(value);
+        },
       )
+      .catch((error: unknown) => {
+        // Only successes are memoized; a failed or cancelled job can be retried.
+        if (this.promises.get(entry.key)) this.promises.delete(entry.key);
+        entry.reject(error);
+      })
       .finally(() => {
-        // Finished promises stay memoized (a cache) until the owner calls forget().
-        if (entry.abort.signal.aborted) this.promises.delete(entry.key);
         this.running = null;
         this.pump();
       });

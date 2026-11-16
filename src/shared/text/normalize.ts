@@ -2,9 +2,9 @@
 export function normalizeDisplayText(text: string): string {
   return text
     .normalize('NFC')
-    .replace(/[​-‍﻿­]/g, '')
+    .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
     .replace(/\r\n?/g, '\n')
-    .replace(/[\t\f\v  -   　]+/g, ' ')
+    .replace(/[\t\f\v\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{2,}/g, '\n')
     .replace(/ {2,}/g, ' ')

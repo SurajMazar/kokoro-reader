@@ -91,7 +91,7 @@ function kindOf(block: Element): Pick<BlockInput, 'kind' | 'level'> {
   return { kind: 'paragraph' };
 }
 
-const ZERO_WIDTH = /[​-‍﻿­]/;
+const ZERO_WIDTH = /[\u200B-\u200D\uFEFF\u00AD]/;
 const SPACE = /\s/;
 
 class BlockBuilder {
