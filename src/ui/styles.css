@@ -1,0 +1,135 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --kr-bg: #f5f5f7;
+  --kr-surface: #ffffff;
+  --kr-surface-2: #fbfbfd;
+  --kr-elevated: rgba(255, 255, 255, 0.86);
+  --kr-text: #1d1d1f;
+  --kr-muted: #6e6e73;
+  --kr-subtle: #86868b;
+  --kr-border: rgba(0, 0, 0, 0.08);
+  --kr-hover: rgba(0, 0, 0, 0.045);
+  --kr-accent: #6e56cf;
+  --kr-accent-hover: #5f47c2;
+  --kr-accent-soft: rgba(110, 86, 207, 0.1);
+  --kr-accent-fg: #ffffff;
+  --kr-success: #248a3d;
+  --kr-warning: #b25000;
+  --kr-danger: #d93036;
+  --kr-highlight: rgba(124, 92, 255, 0.22);
+  --kr-highlight-block: rgba(124, 92, 255, 0.06);
+  color-scheme: light;
+}
+
+.dark {
+  --kr-bg: #161618;
+  --kr-surface: #1f1f22;
+  --kr-surface-2: #242428;
+  --kr-elevated: rgba(36, 36, 40, 0.86);
+  --kr-text: #f5f5f7;
+  --kr-muted: #a1a1a6;
+  --kr-subtle: #8e8e93;
+  --kr-border: rgba(255, 255, 255, 0.09);
+  --kr-hover: rgba(255, 255, 255, 0.06);
+  --kr-accent: #9e8cfc;
+  --kr-accent-hover: #b1a2ff;
+  --kr-accent-soft: rgba(158, 140, 252, 0.14);
+  --kr-accent-fg: #17151f;
+  --kr-success: #30d158;
+  --kr-warning: #ff9f0a;
+  --kr-danger: #ff6369;
+  --kr-highlight: rgba(158, 140, 252, 0.3);
+  --kr-highlight-block: rgba(158, 140, 252, 0.08);
+  color-scheme: dark;
+}
+
+.high-contrast {
+  --kr-highlight: #ffe066;
+  --kr-highlight-block: rgba(255, 224, 102, 0.22);
+  --kr-border: rgba(127, 127, 127, 0.45);
+}
+
+@theme inline {
+  --color-bg: var(--kr-bg);
+  --color-surface: var(--kr-surface);
+  --color-surface-2: var(--kr-surface-2);
+  --color-elevated: var(--kr-elevated);
+  --color-text: var(--kr-text);
+  --color-muted: var(--kr-muted);
+  --color-subtle: var(--kr-subtle);
+  --color-line: var(--kr-border);
+  --color-hover: var(--kr-hover);
+  --color-accent: var(--kr-accent);
+  --color-accent-hover: var(--kr-accent-hover);
+  --color-accent-soft: var(--kr-accent-soft);
+  --color-accent-fg: var(--kr-accent-fg);
+  --color-success: var(--kr-success);
+  --color-warning: var(--kr-warning);
+  --color-danger: var(--kr-danger);
+  --color-mark: var(--kr-highlight);
+  --color-mark-block: var(--kr-highlight-block);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, Roboto, system-ui, sans-serif;
+  --font-serif: 'New York', 'Iowan Old Style', 'Charter', 'Georgia', ui-serif, serif;
+  --shadow-card: 0 0.5px 0 rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-pop: 0 1px 1px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.12), 0 24px 48px rgba(0, 0, 0, 0.08);
+}
+
+html,
+body {
+  background: var(--kr-bg);
+  color: var(--kr-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-size: 13px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--kr-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--kr-highlight);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--kr-border);
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--kr-surface);
+  border: 0.5px solid var(--kr-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}

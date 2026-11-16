@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Content Fixture</title>
+<style>body{font-family:Georgia,serif;line-height:1.6;max-width:860px;margin:0 auto;padding:16px;color:#222}nav a{margin-right:12px}</style>
+</head>
+<body>
+<div id="container"><p id="loading">Loading…</p></div>
+<button id="load-more">Load more</button>
+<script>
+var extra=0;
+setTimeout(function(){
+ var c=document.getElementById('container');
+ c.innerHTML='<article id="dyn-article"><h1>Tides and the Moon</h1>'+
+ '<p>The Moon pulls gently on the oceans. This creates two bulges of water on opposite sides of the Earth.</p>'+
+ '<p>Sailors have long tracked the tides. A tide table tells them when the harbour is deep enough.</p>'+
+ '<p>Some coasts see tides of only a few centimetres. Others rise and fall many metres.</p>'+
+ '<p>Tide pools form where the water leaves small basins behind. They are home to crabs and tiny fish.</p></article>';
+},500);
+document.getElementById('load-more').addEventListener('click',function(){
+ var a=document.getElementById('dyn-article'); if(!a) return;
+ for(var i=0;i<2;i++){extra++;var p=document.createElement('p');p.className='more';
+  p.textContent='Extra paragraph '+extra+' talks about a sandy beach. Waves roll in and out all day.';a.appendChild(p);}
+});
+</script>
+</body>
+</html>

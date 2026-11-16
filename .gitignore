@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-e2e/
+release/
+.cache/
+test-results/
+playwright-report/
+coverage/
+*.log
+.DS_Store
+*.onnx

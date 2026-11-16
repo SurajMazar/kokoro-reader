@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPA Fixture</title>
+<style>body{font-family:Georgia,serif;line-height:1.6;max-width:860px;margin:0 auto;padding:16px;color:#222}nav a{margin-right:12px}</style>
+</head>
+<body>
+<nav><button id="route-a">Route A</button> <button id="route-b">Route B</button></nav>
+<div id="app"></div>
+<script>
+const routes={
+ '/spa.html':{h:'Route A: Lighthouses',p:['A lighthouse stands at the edge of the rocky coast. Its beam sweeps the water every few seconds.','Keepers once climbed the spiral stairs each evening. They trimmed the lamps and cleaned the glass.','Today the lights are automatic. Visitors still enjoy the view from the gallery.']},
+ '/route-b':{h:'Route B: Windmills',p:['A windmill turns slowly in the steady breeze. Inside, heavy stones grind the grain into flour.','Millers read the weather by watching the clouds. A change in the wind meant a change in the work.','Many old mills have been restored. Some now host small museums.']}};
+function render(path){const r=routes[path]||routes['/spa.html'];
+ document.getElementById('app').innerHTML='<article><h1>'+r.h+'</h1>'+r.p.map(t=>'<p>'+t+'</p>').join('')+'</article>';}
+document.addEventListener('DOMContentLoaded',()=>{
+ render(location.pathname);
+ document.getElementById('route-a').addEventListener('click',()=>{history.pushState({},'','/spa.html');render('/spa.html');});
+ document.getElementById('route-b').addEventListener('click',()=>{history.pushState({},'','/route-b');render('/route-b');});
+ window.addEventListener('popstate',()=>render(location.pathname));
+});
+</script>
+</body>
+</html>

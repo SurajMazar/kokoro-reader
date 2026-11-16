@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs - Getting Started with Widgets</title>
+<style>body{font-family:Georgia,serif;line-height:1.6;max-width:860px;margin:0 auto;padding:16px;color:#222}nav a{margin-right:12px}pre{background:#f4f4f4;padding:8px;overflow:auto}</style>
+</head>
+<body>
+<div style="display:flex;gap:16px;font-family:sans-serif">
+<nav id="sidenav" style="width:180px"><ul style="list-style:none;padding:0"><li><a href="#intro">Introduction</a></li><li><a href="#install">Installation</a></li><li><a href="#usage">Usage</a></li></ul></nav>
+<main style="flex:1">
+<h1>Getting Started with Widgets</h1>
+<h2 id="intro">Introduction</h2>
+<p>Widgets are small reusable pieces of an interface. This guide shows how to create one and place it on a page.</p>
+<h2 id="install">Installation</h2>
+<p>Install the package with the <code>npm install widgetkit</code> command. Then import the <code>Widget</code> class into your project.</p>
+<pre><code>npm install widgetkit
+npm run build</code></pre>
+<h2 id="usage">Usage</h2>
+<p>Create a widget by calling <code>new Widget(options)</code> and mounting it to an element. The options object controls its size and title.</p>
+<pre><code>const w = new Widget({ title: "Hello", size: "small" });
+w.mount(document.body);</code></pre>
+<p>Call <code>w.destroy()</code> when you no longer need the widget.</p>
+</main></div>
+</body>
+</html>
