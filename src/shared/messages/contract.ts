@@ -73,7 +73,7 @@ export interface RequestMap {
   'tab/info': [{ tabId: number }, PageInfo | null];
   'tab/extract': [{ tabId: number; mode: 'article' | 'page' }, ReadingDoc];
   'reader/open': [{ tabId?: number; mode?: 'article' | 'custom' }, null];
-  'model/state': [Record<string, never>, ModelState];
+  'model/get': [Record<string, never>, ModelState];
   'model/action': [{ action: ModelAction; variantId?: string }, ModelState];
   'voices/list': [Record<string, never>, VoiceInfo[]];
   'voices/preview': [{ voice: string; engine?: EngineId; text?: string }, null];

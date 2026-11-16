@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2, Pause, Play, Square, Volume2 } from 'lucide-react';
 import { request } from '@/shared/messages/bus';
 import type { ControlAction } from '@/shared/messages/contract';
@@ -20,6 +21,13 @@ export function isActive(state: PlaybackState | null): state is PlaybackState {
 
 /** Transport, position and speed controls for the active session. Used by the popup, side panel and reader. */
 export function PlayerControls({ state, size = 'md', showVolume = false }: { state: PlaybackState; size?: 'md' | 'lg'; showVolume?: boolean }) {
+  // While dragging, show the thumb locally and seek once on release.
+  const [dragging, setDragging] = useState<number | null>(null);
+  const commit = () => {
+    if (dragging === null) return;
+    void control('seek', dragging);
+    setDragging(null);
+  };
   const playing = state.status === 'playing' || state.status === 'buffering' || state.status === 'preparing';
   const loading = state.status === 'buffering' || state.status === 'preparing';
   const count = Math.max(1, state.sentenceCount);
@@ -27,16 +35,19 @@ export function PlayerControls({ state, size = 'md', showVolume = false }: { sta
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 text-[11px] text-muted tabular-nums">
-        <span className="w-12">{`${state.sentenceIndex + 1} / ${count}`}</span>
+        <span className="w-12">{`${(dragging ?? state.sentenceIndex) + 1} / ${count}`}</span>
         <input
           type="range"
           className="min-w-0 flex-1"
           min={0}
           max={count - 1}
-          value={state.sentenceIndex}
+          value={dragging ?? state.sentenceIndex}
           aria-label="Reading position"
-          aria-valuetext={`Sentence ${state.sentenceIndex + 1} of ${count}`}
-          onChange={(event) => void control('seek', Number(event.target.value))}
+          aria-valuetext={`Sentence ${(dragging ?? state.sentenceIndex) + 1} of ${count}`}
+          onChange={(event) => setDragging(Number(event.target.value))}
+          onPointerUp={commit}
+          onKeyUp={commit}
+          onBlur={commit}
         />
         <span className="w-14 text-right">{state.estimatedRemainingSeconds > 0 ? `−${formatDuration(state.estimatedRemainingSeconds)}` : ''}</span>
       </div>

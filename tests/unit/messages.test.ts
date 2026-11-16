@@ -34,6 +34,10 @@ describe('message validation', () => {
     expect(targetOf('playback/state')).toBe('broadcast');
     expect(targetOf('session/start')).toBe('background');
   });
+  it('never reuses a name for both a request and an event', async () => {
+    const { NAME_COLLISIONS } = await import('@/shared/messages/validate');
+    expect(NAME_COLLISIONS).toEqual([]);
+  });
   it('limits what pages may ask for', () => {
     expect(CONTENT_ALLOWED.has('session/start')).toBe(true);
     expect(CONTENT_ALLOWED.has('model/action')).toBe(false);

@@ -51,7 +51,7 @@ export function usePlayback(): PlaybackState | null {
 export function useModelState(): [ModelState | null, () => void] {
   const [state, setState] = useState<ModelState | null>(null);
   const refresh = useCallback(() => {
-    void request('model/state', {}).then(setState).catch(() => undefined);
+    void request('model/get', {}).then(setState).catch(() => undefined);
   }, []);
   useEffect(() => {
     refresh();
@@ -96,6 +96,12 @@ export function useTheme(settings: Settings) {
 export function useActiveTab(): chrome.tabs.Tab | null {
   const [tab, setTab] = useState<chrome.tabs.Tab | null>(null);
   useEffect(() => {
+    // E2E builds only: render the popup in a normal tab against a chosen page (for screenshots).
+    const override = __KOKORO_E2E__ ? Number(new URLSearchParams(location.search).get('tab')) : 0;
+    if (override) {
+      void chrome.tabs.get(override).then(setTab);
+      return;
+    }
     void chrome.tabs.query({ active: true, currentWindow: true }).then(([active]) => setTab(active ?? null));
   }, []);
   return tab;

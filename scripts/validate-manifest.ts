@@ -17,7 +17,7 @@ const need = (condition: unknown, message: string) => {
 const exists = (path: string, what: string) => need(existsSync(join(dir, path.split('?')[0]!)), `${what} not found: ${path}`);
 
 need(manifest.manifest_version === 3, 'manifest_version must be 3');
-need(/^\d+\.\d+\.\d+$/.test(manifest.version), `version must be x.y.z, got ${manifest.version}`);
+need(/^\d+\.\d+\.\d+(\.\d+)?$/.test(manifest.version), `version must be x.y.z, got ${manifest.version}`);
 need(manifest.name && manifest.name.length <= 75, 'name must be 1–75 characters');
 need(manifest.description && manifest.description.length <= 132, 'description must be at most 132 characters');
 exists(manifest.background.service_worker, 'service worker');

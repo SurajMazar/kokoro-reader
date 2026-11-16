@@ -42,6 +42,13 @@ export const test = base.extend<{ page: Page; context: BrowserContext }, Fixture
     async ({ extContext }, use) => {
       let [worker] = extContext.serviceWorkers();
       worker ??= await extContext.waitForEvent('serviceworker');
+      // On a fresh install the selection content script is registered from
+      // onInstalled; pages opened before that will not have it (as in real use).
+      for (let i = 0; i < 100; i++) {
+        const registered = await worker.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).length);
+        if (registered) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
       await use(worker);
     },
     { scope: 'worker' },

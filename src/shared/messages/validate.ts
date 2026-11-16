@@ -48,7 +48,7 @@ const REQUEST_VALIDATORS: Record<RequestType, Check> = {
   'tab/info': shape({ tabId: isNumber }),
   'tab/extract': shape({ tabId: isNumber, mode: oneOf('article', 'page') }),
   'reader/open': shape({ tabId: optional(isNumber), mode: optional(oneOf('article', 'custom')) }),
-  'model/state': isObject,
+  'model/get': isObject,
   'model/action': shape({ action: modelAction, variantId: optional(isString) }),
   'voices/list': isObject,
   'voices/preview': shape({ voice: isString, engine: optional(oneOf('kokoro', 'browser')), text: optional(isString) }),
@@ -93,10 +93,13 @@ export const CONTENT_ALLOWED: ReadonlySet<string> = new Set<RequestType>([
   'session/set',
   'session/state',
   'reader/open',
-  'model/state',
+  'model/get',
   'voices/list',
   'ui/open-options',
 ]);
+
+/** Names shared by a request and an event would be swallowed as events by listen(); this must stay empty. */
+export const NAME_COLLISIONS = Object.keys(REQUEST_VALIDATORS).filter((name) => name in EVENT_VALIDATORS);
 
 export function isRequestType(type: string): type is RequestType {
   return type in REQUEST_VALIDATORS;

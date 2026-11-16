@@ -15,7 +15,11 @@ export function buildManifest({ e2e = false }: ManifestOptions = {}): chrome.run
     manifest_version: 3,
     name: 'Kokoro Reader',
     short_name: 'Kokoro Reader',
-    version: pkg.version,
+    // E2E builds get a unique fourth version part. Chrome then treats each
+    // build as an update of the unpacked extension and re-registers its
+    // service worker instead of running a cached script, while keeping the
+    // test profile's downloaded model.
+    version: e2e ? `${pkg.version}.${Math.floor(Date.now() / 60_000) % 65_535}` : pkg.version,
     description: 'Listen to any webpage with natural AI speech generated privately on your device by Kokoro-82M.',
     minimum_chrome_version: '116',
     icons,

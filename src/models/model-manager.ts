@@ -205,6 +205,7 @@ export class ModelManager {
           initMs: readiness.initMs,
           lastUsed: Date.now(),
           progress: null,
+          cachedBytes: await cachedBytes().catch(() => this.state.cachedBytes),
           error: lastError ? new AppError('E_WEBGPU_UNAVAILABLE', String((lastError as Error).message ?? lastError)).toInfo() : null,
         });
         this.options.onDiagnostic?.('model-init', {

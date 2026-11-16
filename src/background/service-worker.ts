@@ -121,7 +121,7 @@ listen({
       await openReader(tabId, mode ?? 'article');
       return null;
     },
-    'model/state': () => modelState(),
+    'model/get': () => modelState(),
     'model/action': async ({ action, variantId }) => {
       const settings = await getSettings();
       await ensureOffscreenDocument();

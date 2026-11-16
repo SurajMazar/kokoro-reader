@@ -148,7 +148,7 @@ export function ModelManagerCard({ state, variantId }: { state: ModelState | nul
             <RotateCcw size={14} /> Retry
           </Button>
         )}
-        {(status === 'downloaded' || status === 'ready') && status !== 'ready' && (
+        {status === 'downloaded' && (
           <Button variant="primary" onClick={() => void modelAction('initialize', variantId)}>
             <Zap size={14} /> Start engine
           </Button>

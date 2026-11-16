@@ -99,6 +99,23 @@ function ArticleView({ doc, initialSentence }: { doc: ReadingDoc; initialSentenc
     return map;
   }, [doc]);
   const words = useMemo(() => countWords(doc.blocks.map((block) => block.text).join(' ')), [doc]);
+  // The article's own first heading doubles as the page title, so it is read and highlighted there.
+  const titleBlock = doc.blocks[0]?.kind === 'heading' && doc.blocks[0].text === doc.title ? doc.blocks[0] : undefined;
+
+  function renderSentences(blockId: number, fallback: string) {
+    const sentences = sentencesByBlock.get(blockId) ?? [];
+    if (!sentences.length) return fallback;
+    return sentences.map((sentence) => (
+      <span
+        key={sentence.id}
+        data-sentence={sentence.id}
+        onClick={() => void startAt(sentence.id)}
+        className={cx('cursor-pointer rounded-[3px] transition-colors duration-200 hover:bg-hover', sentence.id === current && settings.highlightSentence && 'bg-mark')}
+      >
+        {sentence.text}{' '}
+      </span>
+    ));
+  }
 
   useEffect(() => {
     const mark = () => (userScrolledAt.current = Date.now());
@@ -196,7 +213,12 @@ function ArticleView({ doc, initialSentence }: { doc: ReadingDoc; initialSentenc
 
         <article className="mx-auto w-full max-w-[680px] pt-10" lang={doc.language === 'en' ? 'en' : undefined}>
           <p className="mb-2 text-[12px] font-medium tracking-wide text-accent uppercase">{doc.source === 'custom' ? 'Your text' : 'Smart Reader'}</p>
-          <h1 className="font-serif text-[34px] leading-tight font-semibold tracking-tight">{doc.title}</h1>
+          <h1
+            data-block={titleBlock?.id}
+            className={cx('font-serif text-[34px] leading-tight font-semibold tracking-tight', titleBlock && titleBlock.id === currentBlock && settings.highlightParagraph && 'rounded-md bg-mark-block')}
+          >
+            {titleBlock ? renderSentences(titleBlock.id, titleBlock.text) : doc.title}
+          </h1>
           {(doc.byline || doc.url) && (
             <p className="mt-2 text-[13px] text-muted">
               {doc.byline && <span>{doc.byline} · </span>}
@@ -213,21 +235,9 @@ function ArticleView({ doc, initialSentence }: { doc: ReadingDoc; initialSentenc
             </p>
           )}
           <div className="mt-8 font-serif text-[19px] leading-[1.75]">
-            {doc.blocks.map((block, blockIndex) => {
-              if (blockIndex === 0 && block.kind === 'heading' && block.text === doc.title) return null;
-              const sentences = sentencesByBlock.get(block.id) ?? [];
-              const content = sentences.length
-                ? sentences.map((sentence) => (
-                    <span
-                      key={sentence.id}
-                      data-sentence={sentence.id}
-                      onClick={() => void startAt(sentence.id)}
-                      className={cx('cursor-pointer rounded-[3px] transition-colors duration-200 hover:bg-hover', sentence.id === current && settings.highlightSentence && 'bg-mark')}
-                    >
-                      {sentence.text}{' '}
-                    </span>
-                  ))
-                : block.text;
+            {doc.blocks.map((block) => {
+              if (block === titleBlock) return null;
+              const content = renderSentences(block.id, block.text);
               const blockClass = cx('rounded-md transition-colors duration-300', block.id === currentBlock && settings.highlightParagraph && 'bg-mark-block');
               if (block.kind === 'heading') {
                 const level = Math.min(4, Math.max(2, block.level ?? 2));

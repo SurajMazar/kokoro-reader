@@ -15,7 +15,8 @@
     "test:e2e": "playwright test",
     "package": "node scripts/package.ts",
     "icons": "node scripts/render-icons.ts",
-    "pin-model": "node scripts/pin-model.ts"
+    "pin-model": "node scripts/pin-model.ts",
+    "screenshots": "SCREENSHOTS=1 playwright test tests/e2e/screenshots.spec.ts"
   },
   "keywords": [],
   "author": "",
