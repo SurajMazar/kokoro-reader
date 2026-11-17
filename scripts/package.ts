@@ -21,5 +21,11 @@ mkdirSync(outDir, { recursive: true });
 const zip = resolve(outDir, `kokoro-reader-${version}.zip`);
 rmSync(zip, { force: true });
 execFileSync('zip', ['-X', '-r', '-q', zip, '.', '-x', '.*'], { cwd: dist, stdio: 'inherit' });
+// The Chrome Web Store rejects packages whose manifest.json is not at the ZIP root.
+const listing = execFileSync('unzip', ['-Z1', zip], { encoding: 'utf8' }).split('\n');
+if (!listing.includes('manifest.json')) {
+  console.error(`${zip} has no manifest.json at its root; refusing to publish it.`);
+  process.exit(1);
+}
 const sha = createHash('sha256').update(readFileSync(zip)).digest('hex');
 console.log(`Packaged ${zip}\nSHA-256 ${sha}`);

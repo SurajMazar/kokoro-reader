@@ -42,6 +42,10 @@ Measured on an Apple M4; details and method in [docs/performance](docs/performan
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose the unzipped folder.
 3. The welcome page opens. Optionally turn on the speaker button for text selections (this asks for access to all sites) and download the model (92 MB, once).
 
+### Uploading to the Chrome Web Store
+
+Upload `kokoro-reader-<version>.zip` from [Releases](https://github.com/SurajMazar/kokoro-reader/releases) (or `release/` after `npm run package`) as it is. Its `manifest.json` is at the root. Do not unzip and re-compress it: macOS's *Compress* puts everything inside a folder, which the store rejects with "No manifest found in package".
+
 ### From source
 
 Requirements: Node.js 20.19+ (tested with 24), npm, Chrome or Chromium 116+.
