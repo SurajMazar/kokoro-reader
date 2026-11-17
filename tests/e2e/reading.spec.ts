@@ -252,3 +252,51 @@ test('custom text: paste, generate, and export a valid WAV file', async ({ conte
   expect(peak).toBeGreaterThan(3000);
   await reader.close();
 });
+
+test('in-page player: Play replays a finished reading, Play after a voice change uses the new voice, Close dismisses it', async ({ page, context, extensionId, serviceWorker }) => {
+  await page.goto(`${SITE}/basic.html`);
+  const ext = await openExtensionPage(context, extensionId);
+  // Select just the first sentence, like a short selection on any site.
+  await page.evaluate(() => {
+    const text = document.querySelector('#p1')!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, 'The quiet garden wakes slowly every morning.'.length);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(range);
+  });
+  await bgRequest(ext, 'tab/read', { tabId: await tabIdOf(ext, `${SITE}/basic.html`), mode: 'selection' });
+  // Long timeout: when this test runs alone, it includes the first-time model download.
+  const first = await waitForPlayback(serviceWorker, (s) => s.status === 'playing', 600_000);
+  expect(first.sentenceCount).toBe(1);
+  await waitForPlayback(serviceWorker, (s) => s.status === 'ended', 60_000);
+  await page.bringToFront();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: 'test-results/player-ended.png' });
+
+  // The compact player is anchored bottom-right; these are its Play and Close buttons in a 1280×860 viewport.
+  const play = { x: 1003, y: 810 };
+  const close = { x: 1235, y: 693 };
+
+  // 1. Play on a finished reading replays it (it used to do nothing).
+  await page.mouse.click(play.x, play.y);
+  await waitForPlayback(serviceWorker, (s) => s.status === 'playing' && s.sessionId === first.sessionId);
+
+  // 2. Pause, change the voice, Play: the sentence is spoken again in the new voice.
+  await page.mouse.click(play.x, play.y);
+  await waitForPlayback(serviceWorker, (s) => s.status === 'paused');
+  await bgRequest(ext, 'session/set', { voice: 'bm_lewis' });
+  await waitForPlayback(serviceWorker, (s) => s.voice === 'bm_lewis');
+  await page.mouse.click(play.x, play.y);
+  await waitForPlayback(serviceWorker, (s) => s.status === 'playing' && s.voice === 'bm_lewis');
+  await waitForPlayback(serviceWorker, (s) => s.status === 'ended', 60_000);
+
+  // 3. Close on a finished reading stops the session and removes the player and highlight.
+  await page.mouse.click(close.x, close.y);
+  await waitForPlayback(serviceWorker, (s) => s.status === 'idle');
+  await expect.poll(() => page.evaluate(() => CSS.highlights.has('kokoro-reader-sentence'))).toBe(false);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: 'test-results/player-closed.png' });
+  await bgRequest(ext, 'session/set', { voice: 'af_heart' });
+  await ext.close();
+});

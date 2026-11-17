@@ -172,6 +172,41 @@ describe('PlaybackController', () => {
     expect(t.log.length).toBe(synthesized);
   });
 
+  it('after a voice change while paused, Play re-synthesizes the current sentence in the new voice', async () => {
+    const t = setup();
+    await t.controller.load('s1', doc, 1, config);
+    await t.until((s) => s.status === 'playing' && s.sentenceIndex === 1);
+    await t.controller.control('pause');
+    const staleSrc = t.audio.src;
+    await t.controller.set({ voice: 'bf_emma' });
+    expect(t.last().status).toBe('paused');
+    expect(t.audio.src).toBe('');
+    await t.controller.control('play');
+    const state = await t.until((s) => s.status === 'playing');
+    expect(state.voice).toBe('bf_emma');
+    expect(state.sentenceIndex).toBe(1);
+    expect(t.log).toContain('bf_emma:Two is second.');
+    expect(t.audio.src).not.toBe(staleSrc);
+  });
+
+  it('a finished reading can be replayed, also after changing the voice', async () => {
+    const t = setup();
+    const one = buildDoc({ title: 'One', source: 'selection', blocks: [{ kind: 'paragraph', text: 'Watch the generation loop.' }] });
+    await t.controller.load('s1', one, 0, config);
+    await t.until((s) => s.status === 'playing');
+    t.audio.finish();
+    await t.until((s) => s.status === 'ended');
+    await t.controller.control('play');
+    await t.until((s) => s.status === 'playing' && s.sentenceIndex === 0);
+    t.audio.finish();
+    await t.until((s) => s.status === 'ended');
+    await t.controller.set({ voice: 'bm_lewis' });
+    await t.controller.control('play');
+    const replay = await t.until((s) => s.status === 'playing');
+    expect(replay.voice).toBe('bm_lewis');
+    expect(t.log).toContain('bm_lewis:Watch the generation loop.');
+  });
+
   it('regenerates from the current sentence when the voice changes', async () => {
     const t = setup();
     await t.controller.load('s1', doc, 1, config);
@@ -209,6 +244,18 @@ describe('PlaybackController', () => {
     const japanese = buildDoc({ title: 'JP', source: 'selection', blocks: [{ kind: 'paragraph', text: 'これは日本語の文章です。音声合成のテストです。' }] });
     await t.controller.load('s1', japanese, 0, config);
     expect((await t.until((s) => s.status === 'error')).error?.code).toBe('E_UNSUPPORTED_LANGUAGE');
+  });
+
+  it('pausing while play() is still starting is not reported as a playback failure', async () => {
+    const t = setup();
+    await t.controller.load('s1', doc, 0, config);
+    await t.until((s) => s.status === 'playing');
+    // The next play() is interrupted by pause() before it starts, as browsers do.
+    t.audio.play = () => Promise.reject(new DOMException('The play() request was interrupted by a call to pause().', 'AbortError'));
+    await t.controller.control('pause');
+    await t.controller.control('restart');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(t.states.some((s) => s.status === 'error')).toBe(false);
   });
 
   it('stop clears the session', async () => {

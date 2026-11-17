@@ -52,8 +52,16 @@ function boot() {
     return overlay;
   }
 
+  /** Sessions the user closed here: late state messages for them must not reopen the player. */
+  const dismissed = new Set<string>();
+  let shownSessionId: string | null = null;
+
   function ensurePlayer(): FloatingPlayer {
-    player ??= new FloatingPlayer(ensureOverlay(), settings!);
+    player ??= new FloatingPlayer(ensureOverlay(), settings!, () => {
+      if (shownSessionId) dismissed.add(shownSessionId);
+      highlighter?.instance.dispose();
+      highlighter = null;
+    });
     return player;
   }
 
@@ -122,6 +130,8 @@ function boot() {
   }
 
   function onSession(state: PlaybackState) {
+    if (state.sessionId && dismissed.has(state.sessionId)) return;
+    shownSessionId = state.sessionId;
     ensurePlayer().update(state);
     if (!state.docId || state.status === 'idle') return;
     if (highlighter?.docId !== state.docId) {
@@ -135,7 +145,8 @@ function boot() {
     }
   }
 
-  function clearSession() {
+  function clearSession(sessionId: string | null) {
+    if (sessionId) dismissed.add(sessionId);
     player?.hide();
     highlighter?.instance.dispose();
     highlighter = null;
@@ -174,7 +185,7 @@ function boot() {
     },
     events: {
       'content/session': ({ state }) => onSession(state),
-      'content/clear': () => clearSession(),
+      'content/clear': ({ sessionId }) => clearSession(sessionId),
       'content/model': (model) => player?.setModel(model),
     },
   });

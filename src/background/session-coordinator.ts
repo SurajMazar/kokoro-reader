@@ -107,16 +107,30 @@ export async function startSession(
  * document (or the service worker restarted and lost it), the session is
  * restored from storage at its last sentence first.
  */
-export async function controlSession(action: ControlAction, index?: number): Promise<void> {
+export async function controlSession(action: ControlAction, index?: number, fromTabId?: number): Promise<void> {
   const active = await getActiveSession();
-  if (!active) return;
+  if (!active) {
+    // Nothing to control, but a player may still be showing (e.g. after a
+    // service worker restart): make Close always dismiss it.
+    if (action === 'stop' && fromTabId !== undefined) emitToTab(fromTabId, 'content/clear', { sessionId: null });
+    return;
+  }
   const alive = (await hasOffscreenDocument()) ? await request('offscreen/ping', {}).catch(() => null) : null;
   if (!alive || alive.sessionId !== active.sessionId) {
     if (action === 'stop' || action === 'pause') {
-      if (action === 'stop') await endSession(active.sessionId, false);
+      if (action === 'stop') await endSession(active.sessionId);
       return;
     }
-    const start = action === 'seek' && index !== undefined ? index : action === 'next' ? active.sentenceIndex + 1 : active.sentenceIndex;
+    const last = await getPlaybackState();
+    const finished = last?.sessionId === active.sessionId && last.status === 'ended';
+    const start =
+      action === 'seek' && index !== undefined
+        ? index
+        : finished || action === 'restart'
+          ? 0
+          : action === 'next'
+            ? active.sentenceIndex + 1
+            : active.sentenceIndex;
     await loadInOffscreen(active, Math.min(start, active.doc.sentences.length - 1));
     return;
   }
@@ -176,18 +190,28 @@ export async function onPlaybackState(state: PlaybackState): Promise<void> {
   }
 }
 
-async function endSession(sessionId: string, completed: boolean) {
+async function endSession(sessionId: string) {
   const active = await getActiveSession();
   if (!active || active.sessionId !== sessionId) return;
   if (active.tabId !== null) emitToTab(active.tabId, 'content/clear', { sessionId });
-  if (completed && active.queueItemId) await removeFromQueue(active.queueItemId);
   await setActiveSession(null);
 }
 
-/** Session finished or was stopped. Continues with the Listen Later queue when one finished naturally. */
+/**
+ * A session was stopped or reached its end. A stopped session is cleared. A
+ * finished one stays the active session, so the player keeps working: Play
+ * replays it and Close dismisses it. The Listen Later queue, if not empty,
+ * continues instead.
+ */
 export async function onSessionEnded(sessionId: string, completed: boolean): Promise<void> {
-  await endSession(sessionId, completed);
-  if (completed && (await getQueue()).length) await playQueue();
+  if (!completed) {
+    await endSession(sessionId);
+    return;
+  }
+  const active = await getActiveSession();
+  if (active?.sessionId !== sessionId) return;
+  if (active.queueItemId) await removeFromQueue(active.queueItemId);
+  if ((await getQueue()).length) await playQueue();
 }
 
 export async function playQueue(itemId?: string): Promise<{ sessionId: string } | null> {

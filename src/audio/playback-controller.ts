@@ -68,6 +68,15 @@ export interface PlaybackDeps {
 
 const KEEP_BEHIND = 2;
 
+/**
+ * play() rejects with AbortError when pause() or a new source interrupts it
+ * before playback starts, e.g. the user pauses right after pressing Play.
+ * That is an intended interruption, not a playback failure.
+ */
+function interrupted(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 export class PlaybackController {
   private session: Session | null = null;
   private readonly audio: HTMLAudioElement;
@@ -82,6 +91,8 @@ export class PlaybackController {
   private internalPause = false;
   /** Second half of a fast-started sentence, played when the first half ends. */
   private pendingTail: PendingTail | null = null;
+  /** Set when the loaded audio is stale (voice changed while paused): Play must re-synthesize. */
+  private restartOnPlay = false;
 
   constructor(private readonly deps: PlaybackDeps) {
     this.audio = deps.createAudio?.() ?? new Audio();
@@ -360,6 +371,7 @@ export class PlaybackController {
     if (!s) return;
     const token = ++this.playToken;
     this.pendingTail = null;
+    this.restartOnPlay = false;
     this.browserAbort?.abort();
     this.haltAudio();
     if (index >= s.doc.sentences.length) {
@@ -404,7 +416,7 @@ export class PlaybackController {
     try {
       await this.audio.play();
     } catch (error) {
-      if (token === this.playToken) this.fail(new AppError('E_PLAYBACK', String(error)));
+      if (token === this.playToken && !interrupted(error)) this.fail(new AppError('E_PLAYBACK', String(error)));
       return;
     }
     if (token !== this.playToken) return;
@@ -461,7 +473,7 @@ export class PlaybackController {
     try {
       await this.audio.play();
     } catch (error) {
-      if (pending.token === this.playToken) this.fail(new AppError('E_PLAYBACK', String(error)));
+      if (pending.token === this.playToken && !interrupted(error)) this.fail(new AppError('E_PLAYBACK', String(error)));
       return;
     }
     this.setStatus('playing');
@@ -508,9 +520,12 @@ export class PlaybackController {
       case 'play':
       case 'toggle': {
         if (action === 'toggle' && (s.status === 'playing' || s.status === 'buffering')) return this.control('pause');
+        if (this.restartOnPlay) return this.playFrom(s.status === 'ended' ? 0 : s.index);
         if (s.status === 'paused' && s.config.engine === 'kokoro' && this.audio.src && !this.audio.ended) {
           this.setStatus('playing');
-          await this.audio.play().catch((error: unknown) => this.fail(new AppError('E_PLAYBACK', String(error))));
+          await this.audio.play().catch((error: unknown) => {
+            if (!interrupted(error)) this.fail(new AppError('E_PLAYBACK', String(error)));
+          });
           return;
         }
         if (s.status === 'paused' && s.config.engine === 'browser') {
@@ -558,8 +573,17 @@ export class PlaybackController {
       s.config.volume = clampVolume(volume);
       this.audio.volume = s.config.volume;
     }
-    if (voice !== undefined && voice !== s.config.voice) {
-      const wasActive = s.status === 'playing' || s.status === 'buffering';
+    const currentVoice = s.config.engine === 'browser' ? s.config.browserVoice : s.config.voice;
+    if (voice !== undefined && voice !== currentVoice) {
+      const wasActive = s.status === 'playing' || s.status === 'buffering' || s.status === 'preparing';
+      // Whatever is loaded or speaking is in the old voice; drop it.
+      this.playToken += 1;
+      this.pendingTail = null;
+      this.browserAbort?.abort();
+      void this.deps.browser.cancel();
+      this.haltAudio();
+      this.audio.removeAttribute('src');
+      this.audio.load();
       if (s.config.engine === 'browser') s.config.browserVoice = voice;
       else {
         s.config.voice = voice;
@@ -577,6 +601,7 @@ export class PlaybackController {
         await this.playFrom(s.index);
         return;
       }
+      this.restartOnPlay = true;
     }
     this.emit();
   }

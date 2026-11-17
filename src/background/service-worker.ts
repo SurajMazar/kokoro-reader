@@ -97,8 +97,8 @@ listen({
   requests: {
     'session/start': async ({ doc, tabId, startSentence, enqueue }, sender) =>
       startSession(doc, sender.tab?.id ?? tabId ?? null, startSentence ?? 0, { enqueue }),
-    'session/control': async ({ action, index }) => {
-      await controlSession(action, index);
+    'session/control': async ({ action, index }, sender) => {
+      await controlSession(action, index, sender.tab?.id);
       return null;
     },
     'session/set': async (patch) => {

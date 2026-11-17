@@ -19,6 +19,8 @@ export class FloatingPlayer {
   constructor(
     private readonly overlay: OverlayRoot,
     private settings: Settings,
+    /** Called when the user closes the player (before the stop request is sent). */
+    private readonly onClose: () => void = () => undefined,
   ) {
     this.mode = settings.playerMode;
   }
@@ -46,6 +48,14 @@ export class FloatingPlayer {
     this.element?.remove();
     this.element = null;
     this.speedMenuOpen = false;
+  }
+
+  /** Closes at once, whatever the background answers, then stops the reading. */
+  private close() {
+    this.onClose();
+    this.hide();
+    this.state = null;
+    this.control('stop');
   }
 
   private control(action: ControlAction, index?: number) {
@@ -131,7 +141,7 @@ export class FloatingPlayer {
           this.mode = 'compact';
           this.render();
         }),
-        this.iconButton('close', 'Stop reading', () => this.control('stop')),
+        this.iconButton('close', 'Stop reading', () => this.close()),
       );
       this.swap(previous, root);
       return;
@@ -152,7 +162,7 @@ export class FloatingPlayer {
         if (this.mode === 'expanded') void this.loadVoices();
         this.render();
       }),
-      this.iconButton('close', 'Stop reading and close', () => this.control('stop')),
+      this.iconButton('close', 'Stop reading and close', () => this.close()),
     ]);
     root.append(header);
 
