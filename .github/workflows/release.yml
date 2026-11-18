@@ -7,6 +7,11 @@ on:
 permissions:
   contents: write
 
+env:
+  # onnxruntime-node (a transformers.js dependency the extension never runs)
+  # downloads CUDA binaries on Linux at install time; that download now 404s.
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
 jobs:
   release:
     runs-on: ubuntu-latest
