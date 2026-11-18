@@ -1,0 +1,31 @@
+{
+  "repository": "rhasspy/piper-voices",
+  "revision": "0ca208afc2a2ee102b1e961e72e0a7e4907be3d0",
+  "generatedAt": "2026-11-18T05:53:36.216Z",
+  "files": {
+    "ne/ne_NP/chitwan/medium/MODEL_CARD": {
+      "size": 419,
+      "sha256": "dbc908356b71858b89020de9aa81e5f35456f9d8ecdc417ced4712e27b708bb7"
+    },
+    "ne/ne_NP/chitwan/medium/ne_NP-chitwan-medium.onnx": {
+      "size": 63221984,
+      "sha256": "093c497b0cbe9385bb3af2f2cf3fbc400fe1e07803b2ab43e369c49991ba7e82"
+    },
+    "ne/ne_NP/chitwan/medium/ne_NP-chitwan-medium.onnx.json": {
+      "size": 6224,
+      "sha256": "809d4d4b8656e85d9cb3aa48c716f3459e2c585609a22918558f2367e627e7b3"
+    },
+    "ne/ne_NP/google/medium/MODEL_CARD": {
+      "size": 283,
+      "sha256": "8c5adac354771cc5f85cde49062ea8ef4286acc84f360d1008d0758d6c816b5c"
+    },
+    "ne/ne_NP/google/medium/ne_NP-google-medium.onnx": {
+      "size": 76766385,
+      "sha256": "e3ff3cbf97a7c01ebf29263c7fa1899ebed15e27a2d819b93dcfb86e10d39eaa"
+    },
+    "ne/ne_NP/google/medium/ne_NP-google-medium.onnx.json": {
+      "size": 5165,
+      "sha256": "8c3c364bd2ab369850ae0b5d97b9c7a37ea15fb2eb5b91f8fd10e7ffd85ae4eb"
+    }
+  }
+}

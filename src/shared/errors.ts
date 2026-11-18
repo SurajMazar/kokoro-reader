@@ -20,7 +20,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorSpec> = {
   E_WORKER_CRASHED: { message: 'The speech engine stopped unexpectedly and has been restarted.', recovery: 'retry' },
   E_EMPTY_TEXT: { message: 'There is no readable text here. Select some text first.', recovery: 'select-text' },
   E_UNSUPPORTED_PAGE: { message: 'Chrome does not let extensions read this page (for example chrome:// pages and the Web Store).', recovery: 'none' },
-  E_UNSUPPORTED_LANGUAGE: { message: 'This text does not look like English. Kokoro Reader currently speaks English only.', recovery: 'none' },
+  E_UNSUPPORTED_LANGUAGE: { message: 'This text does not look like English or Nepali, the languages Kokoro Reader speaks.', recovery: 'none' },
   E_EXTRACTION: { message: 'No article text could be found on this page. Try selecting the text you want to hear.', recovery: 'select-text' },
   E_PERMISSION: { message: 'Kokoro Reader needs permission to read this site.', recovery: 'grant-permission' },
   E_TAB_CLOSED: { message: 'The tab being read was closed.', recovery: 'none' },

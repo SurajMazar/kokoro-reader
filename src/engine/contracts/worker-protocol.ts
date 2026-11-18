@@ -39,3 +39,25 @@ export type WorkerResponse =
   | { type: 'disposed'; id: number }
   | { type: 'progress'; id: number; message: string }
   | { type: 'error'; id: number; error: AppErrorInfo };
+
+// ------------------------------------------------------------- Piper worker
+
+export interface PiperWorkerInit {
+  type: 'init';
+  id: number;
+  wasmPaths: string;
+  cacheName: string;
+}
+
+export interface PiperWorkerSynthesize {
+  type: 'synthesize';
+  id: number;
+  text: string;
+  /** Cache Storage keys (pinned URLs) of the voice's model and config. */
+  modelUrl: string;
+  configUrl: string;
+  speaker: number | null;
+  speed: number;
+}
+
+export type PiperWorkerRequest = PiperWorkerInit | PiperWorkerSynthesize | WorkerDispose | WorkerCancel;

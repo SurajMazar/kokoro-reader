@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 16 November 2026_
+_Last updated: 18 November 2026_
 
 Kokoro Reader is designed so that what you read stays on your computer.
 
@@ -11,7 +11,7 @@ Kokoro Reader is designed so that what you read stays on your computer.
 
 ## Network requests
 
-The only network requests the extension makes are downloads of the Kokoro model files (config, tokenizer, ONNX model and voice files) from `huggingface.co`, at a pinned revision. They contain no information about you or the pages you read beyond what any file download reveals (your IP address, to Hugging Face). Files are verified by SHA-256 and stored in the extension's local cache.
+The only network requests the extension makes are downloads of the Kokoro model files (config, tokenizer, ONNX model and voice files) and, when you first use a Nepali voice, its voice pack, from `huggingface.co`, at pinned revisions. They contain no information about you or the pages you read beyond what any file download reveals (your IP address, to Hugging Face). Files are verified by SHA-256 and stored in the extension's local cache.
 
 **Optional browser speech.** If you switch the engine to "Browser speech", text is spoken by your operating system's speech service. Some system voices are network voices provided by your OS or browser vendor; their handling of text is governed by that vendor's policy. Kokoro (the default) never uses the network for speech.
 

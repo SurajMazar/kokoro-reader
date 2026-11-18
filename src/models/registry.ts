@@ -1,4 +1,5 @@
 import manifest from './model-manifest.json';
+import packManifest from './voice-packs-manifest.json';
 
 export interface ModelVariant {
   id: string;
@@ -63,16 +64,30 @@ export interface PinnedFile {
   sha256: string;
 }
 
+/**
+ * Optional voice-pack files (Piper voices from rhasspy/piper-voices) share the
+ * verified store with Kokoro. Their paths carry this prefix so one path names
+ * one pinned file in one repository.
+ */
+export const PACK_PREFIX = 'piper-voices/';
+export const PACK_REPOSITORY = packManifest.repository;
+export const PACK_REVISION = packManifest.revision;
+
 const FILES = manifest.files as Record<string, { size: number; sha256: string }>;
+const PACK_FILES = packManifest.files as Record<string, { size: number; sha256: string }>;
+
+function entryFor(path: string): { size: number; sha256: string } | undefined {
+  return path.startsWith(PACK_PREFIX) ? PACK_FILES[path.slice(PACK_PREFIX.length)] : FILES[path];
+}
 
 export function pinnedFile(path: string): PinnedFile {
-  const entry = FILES[path];
+  const entry = entryFor(path);
   if (!entry) throw new Error(`File is not in the pinned model manifest: ${path}`);
   return { path, ...entry };
 }
 
 export function isPinned(path: string): boolean {
-  return path in FILES;
+  return Boolean(entryFor(path));
 }
 
 /** All files a variant needs before it can initialize. */
@@ -86,5 +101,8 @@ export function variantDownloadBytes(variant: ModelVariant): number {
 
 /** The canonical download URL, pinned to an exact commit, which is also the Cache Storage key. */
 export function fileUrl(path: string): string {
+  if (path.startsWith(PACK_PREFIX)) {
+    return `https://huggingface.co/${PACK_REPOSITORY}/resolve/${PACK_REVISION}/${path.slice(PACK_PREFIX.length)}`;
+  }
   return `https://huggingface.co/${MODEL_REPOSITORY}/resolve/${MODEL_REVISION}/${path}`;
 }

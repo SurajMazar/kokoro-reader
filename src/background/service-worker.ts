@@ -5,6 +5,7 @@
  * offscreen document.
  */
 import { KOKORO_VOICES } from '@/engine/kokoro/voices';
+import { isNepaliVoice, NEPALI_VOICES, packBytes, VOICE_PACKS } from '@/engine/piper/voices';
 import { emitToTab, listen, request, requestTab } from '@/shared/messages/bus';
 import { AppError, toErrorInfo } from '@/shared/errors';
 import {
@@ -37,6 +38,8 @@ import {
 import { activeTabId, ensureContentScript } from './tab-manager';
 
 const PREVIEW_TEXT = 'Hello! This is how I sound when I read the web to you.';
+/** “Hello! This is how I sound when I read the web to you.” */
+const PREVIEW_TEXT_NE = 'नमस्ते! म तपाईंलाई वेब पढेर सुनाउँदा यस्तो सुनिन्छु।';
 
 const IDLE_STATE: PlaybackState = {
   sessionId: null,
@@ -88,6 +91,14 @@ async function modelState(): Promise<ModelState> {
     lastUsed: stored?.lastUsed ?? null,
     initMs: stored?.initMs ?? null,
     error: status === 'error' ? (stored?.error ?? null) : null,
+    // Without the offscreen document nothing is downloading; the next refresh reads the cache.
+    packs: Object.fromEntries(
+      VOICE_PACKS.map((pack) => {
+        const known = stored?.packs?.[pack.id];
+        const status = !known || known.status === 'downloading' ? 'not-downloaded' : known.status;
+        return [pack.id, { status, progress: null, bytes: packBytes(pack), error: known?.error ?? null }];
+      }),
+    ),
   };
 }
 
@@ -129,9 +140,16 @@ listen({
       await setStoredModelState(state);
       return state;
     },
+    'model/pack': async ({ action, packId }) => {
+      const settings = await getSettings();
+      await ensureOffscreenDocument();
+      const state = await request('offscreen/pack', { action, packId, variantId: settings.variantId });
+      await setStoredModelState(state);
+      return state;
+    },
     'voices/list': async () => {
       const settings = await getSettings();
-      if (settings.engine === 'kokoro') return [...KOKORO_VOICES];
+      if (settings.engine === 'kokoro') return [...KOKORO_VOICES, ...NEPALI_VOICES];
       await ensureOffscreenDocument();
       return request('offscreen/browser-voices', {});
     },
@@ -141,7 +159,7 @@ listen({
       await request('offscreen/preview', {
         voice,
         engine: engine ?? settings.engine,
-        text: text ?? PREVIEW_TEXT,
+        text: text ?? (isNepaliVoice(voice) ? PREVIEW_TEXT_NE : PREVIEW_TEXT),
         config: engineConfig({ ...settings, engine: engine ?? settings.engine }),
       });
       return null;

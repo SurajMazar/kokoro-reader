@@ -1,9 +1,25 @@
-import { Check, Loader2, Play, Search, Star } from 'lucide-react';
+import { Check, Download, Loader2, Play, Search, Star, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { getNepaliVoice, getPack, isNepaliVoice, packBytes, VOICE_PACKS } from '@/engine/piper/voices';
 import { request } from '@/shared/messages/bus';
 import type { Settings } from '@/shared/settings';
-import type { VoiceInfo } from '@/shared/types';
+import type { VoiceInfo, VoicePackState } from '@/shared/types';
+import { formatBytes } from '@/shared/utils/format';
+import { useModelState } from '../hooks';
 import { cx, IconButton, Segmented } from './primitives';
+
+function packLine(state: VoicePackState | undefined, packId: string): string {
+  if (!state) return `${formatBytes(packBytes(getPack(packId)))}, downloads on first use`;
+  if (state.status === 'downloading' && state.progress) return `downloading ${Math.round((state.progress.loaded / Math.max(1, state.progress.total)) * 100)}%`;
+  if (state.status === 'downloaded') return 'downloaded';
+  if (state.status === 'error') return 'download failed';
+  return `${formatBytes(state.bytes)}, downloads on first use`;
+}
+
+/** Initials for the avatar: "Ch" for Chitwan, the number for "Speaker 12". */
+function initials(name: string): string {
+  return /\d+$/.exec(name)?.[0] ?? name.slice(0, 2);
+}
 
 /**
  * Voice catalogue with search, language filter, favorites, recents, preview
@@ -24,8 +40,10 @@ export function VoiceLibrary({
   const [language, setLanguage] = useState<string>('all');
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [model] = useModelState();
   const isBrowser = settings.engine === 'browser';
   const current = isBrowser ? settings.browserVoice : settings.voice;
+  const isSelected = (voice: VoiceInfo) => (isNepaliVoice(voice.id) ? settings.nepaliVoice === voice.id : voice.id === current);
 
   const languages = useMemo(() => [...new Set(voices.map((voice) => voice.languageLabel))].sort(), [voices]);
   const filtered = useMemo(() => {
@@ -54,7 +72,9 @@ export function VoiceLibrary({
   }
 
   async function choose(voice: VoiceInfo) {
-    if (isBrowser) await update({ browserVoice: voice.id });
+    // A Nepali voice fills the Nepali slot: it reads Devanagari text while the main voice reads the rest.
+    if (isNepaliVoice(voice.id)) await update({ nepaliVoice: voice.id });
+    else if (isBrowser) await update({ browserVoice: voice.id });
     else await update({ voice: voice.id, recentVoices: [voice.id, ...settings.recentVoices.filter((id) => id !== voice.id)].slice(0, 6) });
     await request('session/set', { voice: voice.id }).catch(() => undefined);
   }
@@ -105,13 +125,14 @@ export function VoiceLibrary({
       )}
       <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border-[0.5px] border-line bg-surface shadow-card" aria-label="Voices">
         {filtered.map((voice) => {
-          const selected = voice.id === current;
+          const selected = isSelected(voice);
+          const nepali = getNepaliVoice(voice.id);
           const favorite = settings.favoriteVoices.includes(voice.id);
           return (
             <li key={voice.id} className={cx('flex items-center gap-2 px-3 py-2', selected && 'bg-accent-soft')}>
               <button type="button" onClick={() => void choose(voice)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-pressed={selected}>
                 <span className={cx('grid size-8 flex-none place-items-center rounded-full text-[12px] font-semibold', voice.gender === 'Female' ? 'bg-[#f3e8ff] text-[#7c3aed] dark:bg-[#3b2a5c] dark:text-[#c4b5fd]' : 'bg-[#e0f2fe] text-[#0369a1] dark:bg-[#123047] dark:text-[#7dd3fc]')}>
-                  {voice.name.slice(0, 2)}
+                  {initials(voice.name)}
                 </span>
                 <span className="min-w-0">
                   <span className="flex items-center gap-1.5 text-[13px] font-medium">
@@ -120,7 +141,9 @@ export function VoiceLibrary({
                     {selected && <Check size={14} className="text-accent" aria-label="Selected" />}
                   </span>
                   <span className="block truncate text-[11.5px] text-muted">
-                    {voice.languageLabel} · {voice.engine === 'kokoro' ? `${voice.gender} · grade ${voice.overallGrade}` : voice.traits}
+                    {nepali
+                      ? `${voice.languageLabel} · ${voice.gender} · ${packLine(model?.packs[nepali.packId], nepali.packId)}`
+                      : `${voice.languageLabel} · ${voice.engine === 'kokoro' ? `${voice.gender} · grade ${voice.overallGrade}` : voice.traits}`}
                   </span>
                 </span>
               </button>
@@ -136,8 +159,59 @@ export function VoiceLibrary({
         {!filtered.length && <li className="px-3 py-6 text-center text-[12px] text-muted">No voices match “{query}”.</li>}
       </ul>
       {!isBrowser && !compact && (
-        <p className="mt-2 px-1 text-[11.5px] text-subtle">Grades are published by the Kokoro authors and reflect training data quality. Kokoro Reader currently supports English text.</p>
+        <>
+          <p className="mt-2 px-1 text-[11.5px] text-subtle">
+            Your English voice reads English text. Nepali text (Devanagari) is read by your Nepali voice automatically, sentence by sentence. Grades are
+            published by the Kokoro authors and reflect training data quality.
+          </p>
+          <VoicePacks packs={model?.packs ?? {}} />
+        </>
       )}
     </div>
+  );
+}
+
+/** Download and delete controls for the optional Nepali voice packs. */
+function VoicePacks({ packs }: { packs: Record<string, VoicePackState> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  async function act(action: 'download' | 'delete', packId: string) {
+    setBusy(packId);
+    try {
+      await request('model/pack', { action, packId });
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <section aria-label="Nepali voice packs" className="mt-3 rounded-xl border-[0.5px] border-line bg-surface p-3 shadow-card">
+      <h3 className="text-[12.5px] font-semibold">Nepali voice packs</h3>
+      <p className="mt-0.5 text-[11.5px] text-muted">Piper voices from rhasspy/piper-voices, verified by SHA-256 and kept on this device.</p>
+      <ul className="mt-2 space-y-1.5">
+        {VOICE_PACKS.map((pack) => {
+          const state = packs[pack.id];
+          const downloaded = state?.status === 'downloaded';
+          const downloading = state?.status === 'downloading';
+          return (
+            <li key={pack.id} className="flex items-center gap-2 text-[12px]">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{pack.label}</span>
+                <span className="block truncate text-[11px] text-muted">
+                  {pack.license} · {packLine(state, pack.id)}
+                </span>
+              </span>
+              {downloaded ? (
+                <IconButton label={`Delete ${pack.label}`} onClick={() => void act('delete', pack.id)} disabled={busy !== null}>
+                  <Trash2 size={14} />
+                </IconButton>
+              ) : (
+                <IconButton label={`Download ${pack.label}`} onClick={() => void act('download', pack.id)} disabled={busy !== null || downloading}>
+                  {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                </IconButton>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

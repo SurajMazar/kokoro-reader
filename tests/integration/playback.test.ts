@@ -60,7 +60,7 @@ function fakeProvider(log: string[], delay = 0, fail?: (text: string) => boolean
   } as unknown as KokoroProvider;
 }
 
-const config: EngineConfig = { engine: 'kokoro', voice: 'af_heart', browserVoice: null, rate: 1.5, volume: 0.8, variantId: 'q8', backend: 'wasm', prefetchSentences: 2 };
+const config: EngineConfig = { engine: 'kokoro', voice: 'af_heart', nepaliVoice: 'ne_chitwan', browserVoice: null, rate: 1.5, volume: 0.8, variantId: 'q8', backend: 'wasm', prefetchSentences: 2 };
 const doc = buildDoc({
   title: 'Story',
   source: 'custom',
@@ -76,7 +76,12 @@ function setup(options: { delay?: number; fail?: (text: string) => boolean } = {
   const ended: [string, boolean][] = [];
   const audio = new FakeAudio();
   const provider = fakeProvider(log, options.delay, options.fail);
-  const models = { ensureReady: vi.fn(async () => provider), ensureVoice: vi.fn(async () => undefined), getState: () => ({ activeBackend: 'wasm' }) } as unknown as ModelManager;
+  const models = {
+    ensureReady: vi.fn(async () => provider),
+    providerFor: vi.fn(async () => provider),
+    ensureVoice: vi.fn(async () => undefined),
+    getState: () => ({ activeBackend: 'wasm' }),
+  } as unknown as ModelManager;
   let created = 0;
   const controller = new PlaybackController({
     models,
@@ -267,6 +272,64 @@ describe('PlaybackController', () => {
     expect(t.ended).toEqual([['s1', false]]);
     expect(t.controller.sessionId).toBeNull();
   });
+
+  it('reads Devanagari sentences with the Nepali voice and the rest with the main voice', async () => {
+    const t = setup();
+    const mixed = buildDoc({
+      title: 'Mixed',
+      source: 'custom',
+      blocks: [{ kind: 'paragraph', text: 'Hello there. नमस्ते, तपाईंलाई कस्तो छ? Goodbye now.' }],
+    });
+    await t.controller.load('s1', mixed, 0, config);
+    for (let i = 0; i < 3; i++) {
+      await t.until((s) => s.sentenceIndex === i && s.status === 'playing');
+      t.audio.finish();
+    }
+    await t.until((s) => s.status === 'ended');
+    expect(t.log).toEqual(['af_heart:Hello there.', 'ne_chitwan:नमस्ते, तपाईंलाई कस्तो छ?', 'af_heart:Goodbye now.']);
+    // Each sentence asked for the engine of its own voice.
+    const asked = (t.models.providerFor as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
+    expect(new Set(asked)).toEqual(new Set(['af_heart', 'ne_chitwan']));
+  });
+
+  it('a Nepali page starts on the Nepali engine without loading Kokoro first', async () => {
+    const t = setup();
+    const nepali = buildDoc({ title: 'नेपाल', source: 'custom', blocks: [{ kind: 'paragraph', text: 'नेपाल एउटा सुन्दर देश हो। यहाँ हिमाल छन्।' }] });
+    await t.controller.load('s1', nepali, 0, config);
+    await t.until((s) => s.status === 'playing');
+    expect((t.models.providerFor as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe('ne_chitwan');
+    expect(t.models.ensureReady).not.toHaveBeenCalled();
+  });
+
+  it('picking a Nepali voice mid-session changes the Nepali voice, not the main voice', async () => {
+    const t = setup();
+    const mixed = buildDoc({ title: 'Mixed', source: 'custom', blocks: [{ kind: 'paragraph', text: 'नमस्ते साथी। Hello friend.' }] });
+    await t.controller.load('s1', mixed, 0, config);
+    await t.until((s) => s.status === 'playing');
+    await t.controller.set({ voice: 'ne_google_03' });
+    await t.until(() => t.log.includes('ne_google_03:नमस्ते साथी।'));
+    expect(t.last().voice).toBe('af_heart');
+    t.audio.finish();
+    await t.until(() => t.log.includes('af_heart:Hello friend.'));
+  });
+
+  it('exports a mixed document as one 24 kHz file', async () => {
+    const t = setup();
+    const piper = {
+      async synthesize(text: string, { voice }: { voice: string }) {
+        t.log.push(`${voice}:${text}`);
+        return { kind: 'pcm' as const, samples: new Float32Array(2205), sampleRate: 22_050, inferenceMs: 1 };
+      },
+    };
+    const kokoro = await (t.models.ensureReady as unknown as () => Promise<unknown>)();
+    (t.models.providerFor as ReturnType<typeof vi.fn>).mockImplementation(async (voice: string) => (voice.startsWith('ne_') ? piper : kokoro));
+    const mixed = buildDoc({ title: 'Mixed', source: 'custom', blocks: [{ kind: 'paragraph', text: 'One. दुई। Three.' }] });
+    const result = await t.controller.exportWav(mixed, 'af_heart', 1, config);
+    expect(t.log).toEqual(['af_heart:One.', 'ne_chitwan:दुई।', 'af_heart:Three.']);
+    // 0.1 s per sentence at 24 kHz plus two 0.12 s gaps.
+    expect(result.durationSeconds).toBeCloseTo(0.5, 1);
+  });
+
 });
 
 describe('ModelManager backend selection', () => {
@@ -275,7 +338,8 @@ describe('ModelManager backend selection', () => {
     vi.stubGlobal('caches', {
       open: async () => ({
         match: async (url: string) => {
-          const path = url.split(/\/resolve\/[0-9a-f]{40}\//)[1]!;
+          const rest = url.split(/\/resolve\/[0-9a-f]{40}\//)[1]!;
+          const path = url.includes('/rhasspy/piper-voices/') ? `piper-voices/${rest}` : rest;
           return new Response('x', { headers: { 'x-kokoro-sha256': pinnedFile(path).sha256, 'content-length': '1' } });
         },
         keys: async () => [],
@@ -312,7 +376,8 @@ describe('ModelManager backend selection', () => {
     vi.stubGlobal('caches', {
       open: async () => ({
         match: async (url: string) => {
-          const path = url.split(/\/resolve\/[0-9a-f]{40}\//)[1]!;
+          const rest = url.split(/\/resolve\/[0-9a-f]{40}\//)[1]!;
+          const path = url.includes('/rhasspy/piper-voices/') ? `piper-voices/${rest}` : rest;
           return new Response('x', { headers: { 'x-kokoro-sha256': pinnedFile(path).sha256, 'content-length': '1' } });
         },
         keys: async () => [],
@@ -358,5 +423,66 @@ describe('ModelManager backend selection', () => {
     expect(a).toBe(b);
     expect(inits).toBe(1);
     expect(variantFiles(getVariant('q8')).map((f) => f.path)).toContain('onnx/model_quantized.onnx');
+  });
+
+  it('serves Nepali voices from the Piper engine once their pack is cached, and keeps Kokoro unloaded', async () => {
+    const cached = new Set<string>();
+    vi.stubGlobal('caches', {
+      open: async () => ({
+        match: async (url: string) => {
+          if (!cached.has(url)) return undefined;
+          const rest = url.split(/\/resolve\/[0-9a-f]{40}\//)[1]!;
+          return new Response('x', { headers: { 'x-kokoro-sha256': pinnedFile(`piper-voices/${rest}`).sha256, 'content-length': '1' } });
+        },
+        keys: async () => [],
+        delete: async (url: string) => cached.delete(url),
+      }),
+    });
+    const { packFiles, getPack } = await import('@/engine/piper/voices');
+    const { fileUrl } = await import('@/models/registry');
+    for (const file of packFiles(getPack('ne-chitwan'))) cached.add(fileUrl(file.path));
+    let piperInits = 0;
+    const piper = {
+      ready: null as unknown,
+      async initialize() {
+        piperInits++;
+        this.ready = { backend: 'wasm', crossOriginIsolated: true, threads: 2, initMs: 1 };
+        return this.ready;
+      },
+      async dispose() {},
+    };
+    const createProvider = vi.fn();
+    const manager = new ModelManager({ onState: () => undefined, hasWebGpu: () => false, createProvider, createPiper: () => piper as never });
+    const state = await manager.refresh('q8');
+    expect(state.packs['ne-chitwan']!.status).toBe('downloaded');
+    expect(state.packs['ne-google']!.status).toBe('not-downloaded');
+    expect(await manager.providerFor('ne_chitwan', 'q8', 'auto')).toBe(piper);
+    expect(await manager.providerFor('ne_chitwan', 'q8', 'auto')).toBe(piper);
+    expect(piperInits).toBe(1);
+    expect(createProvider).not.toHaveBeenCalled();
+    await manager.deletePack('ne-chitwan');
+    expect(manager.getState().packs['ne-chitwan']!.status).toBe('not-downloaded');
+    expect(cached.size).toBe(0);
+  });
+
+  it('a status refresh racing a finishing download never reverts it to "downloading"', async () => {
+    vi.stubGlobal('caches', {
+      open: async () => ({
+        match: async () => {
+          await new Promise((r) => setTimeout(r, 2));
+          return undefined;
+        },
+        keys: async () => [],
+      }),
+    });
+    const manager = new ModelManager({ onState: () => undefined, hasWebGpu: () => false });
+    const internal = manager as unknown as { set: (patch: object) => void };
+    internal.set({ status: 'downloading' });
+    const refreshing = manager.refresh('q8');
+    // The download completes while refresh is still reading the cache.
+    await new Promise((r) => setTimeout(r, 3));
+    internal.set({ status: 'downloaded' });
+    await refreshing;
+    expect(manager.getState().status).toBe('downloaded');
   });
 });

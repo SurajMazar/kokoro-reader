@@ -2,6 +2,19 @@
 
 All notable changes are documented here. The project follows [Semantic Versioning](https://semver.org/): the extension's `manifest.json` version always equals `package.json`'s.
 
+## 0.2.0 — 2026-11-18
+
+### Nepali
+- 19 Nepali voices from Piper (`rhasspy/piper-voices`): Chitwan (male, CC0) and 18 OpenSLR speakers (female, CC-BY-SA-4.0), in two voice packs that download on first use and can be deleted.
+- Automatic voice per sentence: Devanagari sentences are read by the Nepali voice, everything else by the main voice. Pages mixing Nepali and English switch voices as they read.
+- espeak-ng built from source to WebAssembly with only the Nepali and English data (1.2 MB), at the commit Piper's voices were trained with.
+- Danda (।) ends a sentence; ASCII digits in Nepali text are read in Nepali.
+- WAV export of mixed text resamples to one 24 kHz file.
+- Tests: 93 unit and integration tests (phonemes checked against native espeak-ng, phoneme ids against piper-tts); 14 end-to-end tests including real Nepali inference.
+
+### Fixed
+- A model status refresh that overlapped a finishing download could report the model as still downloading.
+
 ## 0.1.0 — 2026-11-16
 
 First release.

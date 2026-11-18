@@ -27,3 +27,23 @@ export function detectLanguage(text: string, declared?: string): LanguageVerdict
   if (declared?.toLowerCase().startsWith('en')) return 'english';
   return words.length >= 20 ? 'latin-other' : 'unknown';
 }
+
+/**
+ * Share of words written in Devanagari. Words, not characters, are counted:
+ * Devanagari vowel signs make Nepali words long in code points but short in
+ * letters, and a sentence is Nepali when most of its words are.
+ */
+export function devanagariShare(text: string): number {
+  const words = text.match(/[\p{L}\p{M}\p{N}]+/gu) ?? [];
+  if (!words.length) return 0;
+  return words.filter((word) => /\p{Script=Devanagari}/u.test(word)).length / words.length;
+}
+
+/**
+ * True for text the Nepali voices should read: mostly Devanagari. Hindi,
+ * Marathi and Sanskrit use the same script; the extension has no voices for
+ * them, so they are read with the Nepali voice too, which is close.
+ */
+export function isNepaliText(text: string): boolean {
+  return devanagariShare(text) >= 0.5;
+}

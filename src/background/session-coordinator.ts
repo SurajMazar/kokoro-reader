@@ -11,6 +11,7 @@
  * chrome.storage.session, so it survives service-worker suspension and can
  * be restored if Chrome closes the offscreen document.
  */
+import { isNepaliVoice } from '@/engine/piper/voices';
 import { AppError } from '@/shared/errors';
 import { emitToTab, request } from '@/shared/messages/bus';
 import type { ControlAction, EngineConfig } from '@/shared/messages/contract';
@@ -46,6 +47,7 @@ export function engineConfig(settings: Settings): EngineConfig {
   return {
     engine: settings.engine,
     voice: settings.voice,
+    nepaliVoice: settings.nepaliVoice,
     browserVoice: settings.browserVoice,
     rate: settings.rate,
     volume: settings.volume,
@@ -144,6 +146,7 @@ export async function setSessionOptions(patch: { rate?: number; volume?: number;
   if (patch.volume !== undefined) next.volume = patch.volume;
   if (patch.voice !== undefined) {
     if (settings.engine === 'browser') next.browserVoice = patch.voice;
+    else if (isNepaliVoice(patch.voice)) next.nepaliVoice = patch.voice;
     else {
       next.voice = patch.voice;
       next.recentVoices = [patch.voice, ...settings.recentVoices.filter((voice) => voice !== patch.voice)].slice(0, 6);

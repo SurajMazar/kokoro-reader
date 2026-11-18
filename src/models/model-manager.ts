@@ -1,9 +1,12 @@
+import type { TTSProvider } from '@/engine/contracts/tts-provider';
 import { KokoroProvider } from '@/engine/kokoro/kokoro-provider';
 import { voiceFilePath } from '@/engine/kokoro/voices';
+import { PiperProvider } from '@/engine/piper/piper-provider';
+import { getNepaliVoice, getPack, packBytes, packFiles, VOICE_PACKS } from '@/engine/piper/voices';
 import { AppError, toErrorInfo } from '@/shared/errors';
-import type { BackendId, BackendPreference, ModelState } from '@/shared/types';
+import type { BackendId, BackendPreference, ModelState, VoicePackState } from '@/shared/types';
 import { deletePartials } from '@/shared/storage/idb';
-import { cachedBytes, clearModelCache, ensureFile, isCached, validateCached, type FileProgress } from './model-store';
+import { cachedBytes, clearModelCache, deleteCached, ensureFile, isCached, validateCached, type FileProgress } from './model-store';
 import { getVariant, variantDownloadBytes, variantFiles, type ModelVariant } from './registry';
 
 export interface ModelManagerOptions {
@@ -11,7 +14,15 @@ export interface ModelManagerOptions {
   onDiagnostic?: (kind: 'model-init' | 'download' | 'error', data: Record<string, number | string | boolean | null>) => void;
   /** Overridable for tests. */
   createProvider?: (variant: ModelVariant, backend: BackendId) => KokoroProvider;
+  /** Overridable for tests. */
+  createPiper?: () => PiperProvider;
   hasWebGpu?: () => boolean;
+}
+
+function initialPacks(): Record<string, VoicePackState> {
+  return Object.fromEntries(
+    VOICE_PACKS.map((pack) => [pack.id, { status: 'not-downloaded', progress: null, bytes: packBytes(pack), error: null } satisfies VoicePackState]),
+  );
 }
 
 /**
@@ -25,6 +36,9 @@ export class ModelManager {
   private downloadAbort: AbortController | null = null;
   private downloadPromise: Promise<void> | null = null;
   private readyPromise: Promise<KokoroProvider> | null = null;
+  private piper: PiperProvider | null = null;
+  private piperPromise: Promise<PiperProvider> | null = null;
+  private packDownloads = new Map<string, Promise<void>>();
 
   constructor(private readonly options: ModelManagerOptions) {
     this.state = {
@@ -38,6 +52,7 @@ export class ModelManager {
       lastUsed: null,
       initMs: null,
       error: null,
+      packs: initialPacks(),
     };
   }
 
@@ -63,23 +78,150 @@ export class ModelManager {
 
   /** Recomputes status from the cache, e.g. after the offscreen document restarts. */
   async refresh(variantId: string): Promise<ModelState> {
+    // A download, initialization or validation can finish while the cache is
+    // read below. Its status is newer than anything this poll can conclude.
+    const before = this.state.status;
+    const downloaded = await this.isDownloaded(variantId);
+    const bytes = await cachedBytes().catch(() => 0);
+    const packsCached = await this.packsCached();
+    const changed = this.state.status !== before;
     const busy = ['downloading', 'verifying', 'initializing'].includes(this.state.status);
     const ready = this.provider?.ready && this.providerVariant === variantId;
     const same = this.state.variantId === variantId;
     // Busy states and errors are only left by an explicit action (download,
     // initialize, validate, clear), so a status poll never hides an error.
     const status: ModelState['status'] =
-      same && (busy || this.state.status === 'error')
+      same && (changed || busy || this.state.status === 'error')
         ? this.state.status
         : ready
           ? 'ready'
-          : (await this.isDownloaded(variantId))
+          : downloaded
             ? 'downloaded'
             : same && this.state.status === 'paused'
               ? 'paused'
               : 'not-downloaded';
-    this.set({ variantId, status, cachedBytes: await cachedBytes().catch(() => 0) });
+    this.set({ variantId, status, cachedBytes: bytes, packs: this.packStates(packsCached) });
     return this.state;
+  }
+
+  // ------------------------------------------------------------ voice packs
+
+  private async packDownloaded(packId: string): Promise<boolean> {
+    for (const file of packFiles(getPack(packId))) {
+      if (!(await isCached(file.path))) return false;
+    }
+    return true;
+  }
+
+  private async packsCached(): Promise<Record<string, boolean>> {
+    const cached: Record<string, boolean> = {};
+    for (const pack of VOICE_PACKS) cached[pack.id] = await this.packDownloaded(pack.id);
+    return cached;
+  }
+
+  /** Pack states from the cache. A download in progress keeps its state; a failed one keeps its error until the files are there. */
+  private packStates(cached: Record<string, boolean>): Record<string, VoicePackState> {
+    const packs = { ...this.state.packs };
+    for (const pack of VOICE_PACKS) {
+      const current = packs[pack.id]!;
+      if (current.status === 'downloading') continue;
+      const downloaded = cached[pack.id] ?? false;
+      if (!downloaded && current.status === 'error') continue;
+      packs[pack.id] = { ...current, status: downloaded ? 'downloaded' : 'not-downloaded', progress: null, error: null };
+    }
+    return packs;
+  }
+
+  private setPack(packId: string, patch: Partial<VoicePackState>) {
+    this.set({ packs: { ...this.state.packs, [packId]: { ...this.state.packs[packId]!, ...patch } } });
+  }
+
+  /** Downloads and verifies a voice pack. Concurrent calls share one download. */
+  downloadPack(packId: string): Promise<void> {
+    const running = this.packDownloads.get(packId);
+    if (running) return running;
+    const pack = getPack(packId);
+    const total = packBytes(pack);
+    const loadedByFile = new Map<string, number>();
+    const abort = new AbortController();
+    this.setPack(packId, { status: 'downloading', progress: { loaded: 0, total }, error: null });
+    const run = (async () => {
+      try {
+        let lastEmit = 0;
+        for (const file of packFiles(pack)) {
+          await ensureFile(file.path, abort.signal, ({ file: name, loaded }: FileProgress) => {
+            loadedByFile.set(name, loaded);
+            const now = performance.now();
+            if (now - lastEmit > 200) {
+              lastEmit = now;
+              const sum = [...loadedByFile.values()].reduce((a, b) => a + b, 0);
+              this.setPack(packId, { progress: { loaded: sum, total, file: name } });
+            }
+          });
+        }
+        this.setPack(packId, { status: 'downloaded', progress: null });
+        this.set({ cachedBytes: await cachedBytes().catch(() => this.state.cachedBytes) });
+      } catch (error) {
+        const info = toErrorInfo(error, 'E_MODEL_DOWNLOAD');
+        this.setPack(packId, { status: 'error', progress: null, error: info });
+        this.options.onDiagnostic?.('error', { code: info.code, phase: 'pack-download' });
+        throw new AppError(info.code, info.detail);
+      } finally {
+        this.packDownloads.delete(packId);
+      }
+    })();
+    this.packDownloads.set(packId, run);
+    return run;
+  }
+
+  async deletePack(packId: string): Promise<void> {
+    await this.packDownloads.get(packId)?.catch(() => undefined);
+    for (const file of packFiles(getPack(packId))) await deleteCached(file.path);
+    // The worker keeps loaded sessions; restart it so a deleted pack is not used from memory.
+    await this.unloadPiper();
+    this.setPack(packId, { status: 'not-downloaded', progress: null, error: null });
+    this.set({ cachedBytes: await cachedBytes().catch(() => this.state.cachedBytes) });
+  }
+
+  private async ensurePack(packId: string): Promise<void> {
+    if (!(await this.packDownloaded(packId))) await this.downloadPack(packId);
+  }
+
+  private ensurePiper(): Promise<PiperProvider> {
+    if (this.piper?.ready) return Promise.resolve(this.piper);
+    this.piperPromise ??= (async () => {
+      const provider = this.options.createPiper?.() ?? new PiperProvider({ onCrash: () => (this.piper = null) });
+      try {
+        await provider.initialize();
+      } catch (error) {
+        await provider.dispose().catch(() => undefined);
+        throw error;
+      }
+      this.piper = provider;
+      return provider;
+    })().finally(() => {
+      this.piperPromise = null;
+    });
+    return this.piperPromise;
+  }
+
+  private async unloadPiper() {
+    const piper = this.piper;
+    this.piper = null;
+    if (piper) await piper.dispose().catch(() => undefined);
+  }
+
+  /**
+   * The engine for a voice, ready to synthesize: the Piper engine for a
+   * Nepali voice (downloading its pack on first use), Kokoro otherwise.
+   */
+  async providerFor(voice: string, variantId: string, preference: BackendPreference): Promise<TTSProvider> {
+    const nepali = getNepaliVoice(voice);
+    if (!nepali) return this.ensureReady(variantId, preference);
+    await this.ensurePack(nepali.packId);
+    const provider = await this.ensurePiper();
+    this.set({ lastUsed: Date.now() });
+    return provider;
   }
 
   download(variantId: string): Promise<void> {
@@ -143,7 +285,7 @@ export class ModelManager {
     this.downloadAbort?.abort();
     await this.unload();
     await clearModelCache();
-    this.set({ status: 'not-downloaded', progress: null, activeBackend: null, error: null, cachedBytes: 0, initMs: null });
+    this.set({ status: 'not-downloaded', progress: null, activeBackend: null, error: null, cachedBytes: 0, initMs: null, packs: initialPacks() });
     await this.refresh(variantId);
   }
 
@@ -166,6 +308,11 @@ export class ModelManager {
   }
 
   async ensureVoice(voice: string, signal?: AbortSignal) {
+    const nepali = getNepaliVoice(voice);
+    if (nepali) {
+      await this.ensurePack(nepali.packId);
+      return;
+    }
     await ensureFile(voiceFilePath(voice), signal ?? new AbortController().signal, () => undefined);
   }
 
@@ -191,7 +338,7 @@ export class ModelManager {
     const variant = getVariant(variantId);
     if (!(await this.isDownloaded(variantId))) await this.download(variantId);
     if (this.state.status === 'paused') throw new AppError('E_CANCELLED', 'Download paused');
-    await this.unload();
+    await this.unloadKokoro();
     this.set({ variantId, status: 'initializing', error: null });
     let lastError: unknown = null;
     for (const backend of this.backendOrder(variant, preference)) {
@@ -239,7 +386,13 @@ export class ModelManager {
     this.set({ status: 'error', activeBackend: null, error: error.toInfo() });
   }
 
+  /** Frees both engines (idle timeout, settings, cache clear). */
   async unload() {
+    await this.unloadPiper();
+    await this.unloadKokoro();
+  }
+
+  private async unloadKokoro() {
     const provider = this.provider;
     this.provider = null;
     this.providerVariant = null;

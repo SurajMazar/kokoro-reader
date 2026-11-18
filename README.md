@@ -16,6 +16,7 @@ Select a paragraph and click the speaker. Right-click to read a whole page. Open
 - **Follow along.** Sentence and paragraph highlighting through the CSS Custom Highlight API (the page's DOM is never modified), with auto-scroll that yields when you scroll.
 - **Player everywhere.** In-page player (mini, compact, expanded), popup, and side panel: play/pause, previous/next sentence and paragraph, seek, volume, speed 0.5–3× with natural pitch, voice switching.
 - **28 English Kokoro voices** (US and UK) with previews, favorites, recents and voice profiles (docs, news, novels, casual).
+- **Nepali.** 19 Nepali voices (Piper). Nepali text is detected sentence by sentence and read by your Nepali voice automatically, so pages that mix Nepali and English just work. Each voice pack (60 or 73 MB) downloads on first use.
 - **Listen Later** queue that plays back to back, bookmarks, and optional local history with resume.
 - **Your own text.** Paste, type or import `.txt`/`.md`/`.html`, then export a WAV file.
 - **Keeps playing** when you switch tabs or close the popup; restores itself if Chrome unloads the audio engine.
@@ -23,7 +24,7 @@ Select a paragraph and click the speaker. Right-click to read a whole page. Open
 
 ## How it works
 
-The model runs in a Web Worker inside an MV3 offscreen document. Text is split into sentences, normalized, converted to phonemes with eSpeak NG (WebAssembly), and synthesized one sentence at a time while the previous one plays. Model files come from a pinned Hugging Face revision and are verified by SHA-256 before use. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and the decision record.
+The model runs in a Web Worker inside an MV3 offscreen document. Nepali sentences go to a second worker running a Piper voice (VITS) with a Nepali espeak-ng build. Text is split into sentences, normalized, converted to phonemes with eSpeak NG (WebAssembly), and synthesized one sentence at a time while the previous one plays. Model files come from a pinned Hugging Face revision and are verified by SHA-256 before use. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and the decision record.
 
 | | 8-bit model on CPU (default) | Full-precision model on WebGPU |
 | --- | --- | --- |
@@ -98,25 +99,27 @@ src/
   background/   service worker: router, session coordinator, menus, commands, permissions, offscreen lifecycle
   content/      content script: selection detector, floating button and player (Shadow DOM), page extraction, highlighting
   offscreen/    offscreen document hosting the engine and audio
-  workers/      Kokoro inference worker (transformers.js + ONNX Runtime Web)
-  engine/       TTS provider contract, Kokoro provider, phonemizer, voices, speech normalizer, browser-speech fallback
+  workers/      Kokoro inference worker (transformers.js + ONNX Runtime Web), Piper worker (Nepali)
+  engine/       TTS provider contract, Kokoro and Piper providers, phonemizers, voices, speech normalizer, browser-speech fallback
   audio/        playback controller, synthesis queue, fast start, WAV encoding
   models/       pinned manifest, registry, verified model store, model manager
   shared/       message contract and validation, settings, storage, text pipeline, extraction, errors
   popup/ options/ reader/ sidepanel/ welcome/ ui/   React pages and shared UI
 tests/          unit, integration, e2e, fixture websites
-scripts/        manifest, validation, packaging, model pinning, icons, speech verification, walkthrough
+scripts/        manifest, validation, packaging, model pinning, espeak-ng WebAssembly build, icons, speech verification, walkthrough
+vendor/         espeak-ng (Nepali) compiled to WebAssembly by scripts/espeak/build.sh
 ```
 
 ## Tests
 
-- **73 unit and integration tests**: text segmentation and normalization, message validation, settings, errors, WAV encoding, the synthesis queue, DOM extraction against the fixture sites, verified downloads with resume and corruption recovery, and the full playback pipeline with a fake engine.
-- **11 end-to-end tests** in real Chromium with real inference: select-and-click playback, page reading with highlighting, every player control, cross-tab playback, session replacement without stale audio, recovery after the audio engine is unloaded, dynamic/SPA/RTL pages, floating-button placement in nested scroll containers, the Smart Reader, WAV export validity (header, duration, non-silent), and model cache persistence across a browser restart with corruption recovery.
+- **93 unit and integration tests**: text segmentation and normalization, Nepali detection, phonemes checked against native espeak-ng and phoneme ids against piper-tts itself, per-sentence voice routing, message validation, settings, errors, WAV encoding, the synthesis queue, DOM extraction against the fixture sites, verified downloads with resume and corruption recovery, and the full playback pipeline with a fake engine.
+- **14 end-to-end tests** in real Chromium with real inference: select-and-click playback, a mixed Nepali and English page with real Piper inference and Nepali WAV export, page reading with highlighting, every player control, cross-tab playback, session replacement without stale audio, recovery after the audio engine is unloaded, dynamic/SPA/RTL pages, floating-button placement in nested scroll containers, the Smart Reader, WAV export validity (header, duration, non-silent), and model cache persistence across a browser restart with corruption recovery.
 - **Speech verification**: Whisper transcribes exported audio for each supported configuration (0 % word error rate).
 
 ## Known limitations
 
-- **English only.** Kokoro v1.0 has voices for other languages, but they need language-specific phonemizers that were not validated here. Non-Latin text is refused with a clear message instead of being read badly.
+- **English and Nepali only.** Kokoro v1.0 has voices for other languages, but they need language-specific phonemizers that were not validated here. Hindi and other Devanagari text is read by the Nepali voice; text in other non-Latin scripts is refused with a clear message instead of being read badly.
+- **Nepali voices** are Piper's "medium" quality: clear, but plainer than Kokoro. English words inside Nepali sentences are pronounced by espeak-ng's English rules, as in the voices' training.
 - **WebGPU** is used only with the full-precision model; the 8-bit and fp16 models produced garbled audio on WebGPU in testing, so they always run on the CPU. WebGPU results can vary by GPU and driver; a failed test inference falls back to the CPU automatically.
 - **Pages Chrome protects** (chrome:// pages, the Web Store, other extensions) cannot be read. The built-in PDF viewer cannot be scripted, but *Read with Kokoro* on a selection there still works (without highlighting).
 - **Cross-origin iframes and closed shadow roots** on a page are not extracted; select the text to read it.
@@ -130,7 +133,7 @@ scripts/        manifest, validation, packaging, model pinning, icons, speech ve
 
 ## Privacy and security
 
-Text is processed locally and never transmitted. The only network traffic is the one-time model download from Hugging Face, verified by SHA-256. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
+Text is processed locally and never transmitted. The only network traffic is the one-time download of the model and any Nepali voice pack from Hugging Face, verified by SHA-256. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## License and credits
 
@@ -139,5 +142,6 @@ Kokoro Reader is licensed under the **GNU GPL v3.0 or later** ([LICENSE](LICENSE
 - Kokoro-82M by hexgrad (Apache-2.0); ONNX export by onnx-community.
 - kokoro-js by hexgrad and Xenova (Apache-2.0): voice metadata and the text normalization/phonemization logic ported here.
 - transformers.js (Apache-2.0) and ONNX Runtime Web (MIT).
-- eSpeak NG (GPL-3.0-or-later) via phonemizer.
+- eSpeak NG (GPL-3.0-or-later) via phonemizer, and built from source for Nepali.
+- Nepali voices from [Piper](https://github.com/OHF-Voice/piper1-gpl) (`rhasspy/piper-voices`): *chitwan* (CC0, Chitwan dataset) and *google* (CC-BY-SA-4.0, trained on [OpenSLR 43](https://www.openslr.org/43/) by Google). Piper phoneme handling ported from piper1-gpl (GPL-3.0).
 - Mozilla Readability (Apache-2.0), React (MIT), Motion (MIT), Lucide icons (ISC), Tailwind CSS (MIT).

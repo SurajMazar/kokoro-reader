@@ -75,6 +75,26 @@ export function concatenate(clips: Float32Array[], sampleRate: number, gapSecond
   return out;
 }
 
+/**
+ * Linear-interpolation resampling, used to join voices with different sample
+ * rates (Kokoro 24 kHz, Piper 22.05 kHz) into one export. Speech energy sits
+ * well below both Nyquist limits, so linear interpolation is inaudible here.
+ */
+export function resample(samples: Float32Array, from: number, to: number): Float32Array {
+  if (from === to || samples.length === 0) return samples;
+  const length = Math.max(1, Math.round((samples.length * to) / from));
+  const out = new Float32Array(length);
+  const step = from / to;
+  for (let i = 0; i < length; i++) {
+    const position = i * step;
+    const index = Math.floor(position);
+    const next = Math.min(samples.length - 1, index + 1);
+    const fraction = position - index;
+    out[i] = samples[Math.min(index, samples.length - 1)]! * (1 - fraction) + samples[next]! * fraction;
+  }
+  return out;
+}
+
 export function safeFilename(title: string, extension = 'wav'): string {
   const base = title
     .normalize('NFKD')

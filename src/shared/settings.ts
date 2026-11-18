@@ -30,6 +30,8 @@ export interface Settings {
   favoriteVoices: string[];
   recentVoices: string[];
   profiles: VoiceProfile[];
+  /** Voice for sentences written in Devanagari (Nepali); the main voice reads everything else. */
+  nepaliVoice: string;
   // AI engine
   variantId: string;
   backend: BackendPreference;
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'novels', name: 'Novels', voice: 'af_heart', rate: 0.95 },
     { id: 'casual', name: 'Casual reading', voice: 'af_bella', rate: 1.25 },
   ],
+  nepaliVoice: 'ne_chitwan',
   variantId: 'q8',
   backend: 'auto',
   prefetchSentences: 3,
@@ -110,6 +113,7 @@ export function normalizeSettings(stored: unknown): Settings {
   }
   result.rate = clampRate(result.rate);
   result.volume = clampVolume(result.volume);
+  if (!result.nepaliVoice.startsWith('ne_')) result.nepaliVoice = DEFAULT_SETTINGS.nepaliVoice;
   result.prefetchSentences = Math.min(8, Math.max(1, Math.round(result.prefetchSentences)));
   result.minSelectionWords = Math.max(1, Math.round(result.minSelectionWords));
   result.selectionDelayMs = Math.min(2000, Math.max(0, Math.round(result.selectionDelayMs)));

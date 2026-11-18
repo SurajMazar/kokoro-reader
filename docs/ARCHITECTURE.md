@@ -71,6 +71,7 @@ Design points:
 - **Producer–consumer with priorities.** The current sentence is synthesized first; the next N (default 3) are prefetched. Jumping elsewhere re-scores the queue and cancels work outside the window. Only successful results are memoized, so Retry after a failure really retries.
 - **Instant speed changes.** Speed uses the media element's pitch-preserving `playbackRate`, so no audio is regenerated. (Export uses Kokoro's native `speed` input instead.)
 - **Cancellation.** A new session, a voice change, or Stop bumps a token and cancels the queue; late results from the old session are discarded and never played (covered by unit and E2E tests).
+- **A voice per sentence.** A sentence that is mostly Devanagari words is read by the Nepali voice; every other sentence by the main voice. Each engine is loaded on first use, so a Nepali page never downloads Kokoro and an English page never downloads a Nepali pack.
 - **Text maps for highlighting.** While extracting a live page, every output character records the Text node and offset it came from. Sentence offsets become DOM Ranges, which are painted with the CSS Custom Highlight API. The page's DOM is never modified.
 
 ## Model management
@@ -81,6 +82,21 @@ Design points:
 - ONNX Runtime's WebAssembly files ship inside the extension (`/ort/`); nothing executable is loaded remotely.
 - Initialization runs a real test inference. With **Auto**, the fp16/fp32 variants try WebGPU first and fall back to multithreaded WASM if that test fails; the 8-bit default goes straight to WASM, where it is fastest. The UI shows the backend that actually passed.
 - The model is unloaded (offscreen document closed) after a configurable idle time; a paused session is restored from `chrome.storage.session` on resume.
+
+## Nepali voices (Piper)
+
+```
+Devanagari sentence
+  → Nepali normalization (ASCII digits → Devanagari digits, number separators)
+  → espeak-ng (WebAssembly, `vendor/espeak-ng-ne`) clause by clause: IPA + terminator + sentence end
+  → Piper symbol handling: drop language-switch flags, keep punctuation, NFD split, merge trained vowel clusters
+  → phoneme ids (BOS, PAD-interleaved, EOS) → VITS ONNX model (ONNX Runtime Web, WASM) → 22.05 kHz PCM
+```
+
+- Voices come from `rhasspy/piper-voices`, pinned in `src/models/voice-packs-manifest.json` (`npm run pin-voice-packs`, i.e. `node scripts/pin-voice-packs.ts`) and stored by the same verified, resumable model store as Kokoro. Two packs: `ne-chitwan` (one male speaker, CC0, 63 MB) and `ne-google` (18 female speakers from OpenSLR 43, CC-BY-SA-4.0, 77 MB).
+- The Piper worker (`src/workers/piper.worker.ts`) runs beside the Kokoro worker, so a mixed page keeps both engines loaded. It reads model files only from the verified cache.
+- `vendor/espeak-ng-ne` is espeak-ng built from source by `scripts/espeak/build.sh` at commit `724808c`, the commit piper1-gpl pins, with only the phoneme tables and the Nepali and English dictionaries (1.2 MB). The phonemes therefore match what the voices were trained on; `tests/unit/nepali.test.ts` checks the WebAssembly output against native espeak-ng and the phoneme ids against piper-tts 1.8.0.
+- Exports that mix both engines are resampled to Kokoro's 24 kHz.
 
 ## Session policy
 
@@ -99,5 +115,7 @@ Exactly one session is active. Starting a new one replaces it (highlights in the
 | 7 | **CSS Custom Highlight API** | Wrapping sentences in `<span>`s | No DOM mutation, so frameworks (React, Vue) on the page are unaffected and nothing needs to be cleaned up. |
 | 8 | **chrome.storage as the shared store** (no Zustand) | Zustand per page | State must be shared across the popup, side panel, reader, options and service worker. `chrome.storage` already provides persistence and change events across contexts, so a client-side store would duplicate it. |
 | 9 | **Readability runs in extension pages**, not the content script | Bundle Readability in the content script | The content script sends an HTML snapshot; Readability parses it in the offscreen document or Smart Reader page into an inert document. The content script stays small, and page HTML is never rendered. |
-| 10 | **English only** in this version | Offer all 54 Kokoro voices | Kokoro v1.0 also has Spanish, French, Hindi, Italian, Portuguese, Japanese and Mandarin voices, but they need language-specific G2P (misaki) that was not validated here. The catalogue is keyed by language so more can be added without restructuring. |
-| 11 | **GPL-3.0-or-later** license | MIT | The `phonemizer` package bundles eSpeak NG (GPL-3.0-or-later) compiled to WebAssembly. Distributing the extension therefore distributes GPL code. |
+| 10 | **English (Kokoro) and Nepali (Piper)** | Offer all 54 Kokoro voices | Kokoro v1.0 also has Spanish, French, Hindi, Italian, Portuguese, Japanese and Mandarin voices, but they need language-specific G2P (misaki) that was not validated here. Kokoro has no Nepali voice, so Nepali uses Piper VITS voices (decision 12). |
+| 12 | **Piper voices for Nepali**, phonemized by our own espeak-ng WebAssembly build | Indic Parler-TTS; Swar (a Kokoro-derived Nepali model); MMS-TTS | Piper models are small (63–77 MB), run faster than real time on the CPU, and have open licenses (CC0, CC-BY-SA). Indic Parler-TTS (0.9 B parameters) is too large for a browser; Swar and MMS are CC-BY-NC. The npm `phonemizer` build contains English only and the full espeak-ng builds are 18–25 MB, so a Nepali-only build (1.2 MB) is compiled from the commit Piper trains with. |
+| 13 | **Automatic voice per sentence** by script | A language setting, or one language per document | Pages often mix Nepali and English. Choosing by sentence (mostly Devanagari words → Nepali voice) reads both correctly with no setting to change, and picking a Nepali voice fills a separate Nepali slot so it cannot make English pages sound Nepali. |
+| 11 | **GPL-3.0-or-later** license | MIT | The `phonemizer` package and `vendor/espeak-ng-ne` are eSpeak NG (GPL-3.0-or-later) compiled to WebAssembly. Distributing the extension therefore distributes GPL code. |

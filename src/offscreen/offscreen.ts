@@ -81,6 +81,11 @@ listen({
       }
       return action === 'download' || action === 'initialize' ? models.getState() : models.refresh(variantId);
     },
+    'offscreen/pack': async ({ action, packId, variantId }) => {
+      if (action === 'download') void models.downloadPack(packId).catch(() => undefined);
+      else await models.deletePack(packId);
+      return action === 'download' ? models.getState() : models.refresh(variantId);
+    },
     'offscreen/preview': async ({ voice, text, config }) => {
       await player.previewVoice(voice, text, config);
       return null;

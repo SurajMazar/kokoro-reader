@@ -8,18 +8,22 @@
  * as soon as the first clip is ready while the next few are generated in the
  * background. Speed changes use the audio element's pitch-preserving
  * playbackRate, so they apply instantly without regenerating audio.
+ *
+ * Each sentence picks its voice: Devanagari sentences are read by the Nepali
+ * voice (Piper), everything else by the main voice (Kokoro), so a page that
+ * mixes the two languages switches engines sentence by sentence.
  */
 import type { BrowserSpeechProvider } from '@/engine/fallback/browser-speech-provider';
-import type { KokoroProvider } from '@/engine/kokoro/kokoro-provider';
+import { isNepaliVoice } from '@/engine/piper/voices';
 import type { ModelManager } from '@/models/model-manager';
 import type { ControlAction, EngineConfig, ExportResult } from '@/shared/messages/contract';
 import { clampRate, clampVolume } from '@/shared/settings';
 import { AppError, toErrorInfo } from '@/shared/errors';
-import { detectLanguage } from '@/shared/text/language';
+import { detectLanguage, devanagariShare, isNepaliText } from '@/shared/text/language';
 import { countWords, WORDS_PER_SECOND_AT_1X } from '@/shared/text/normalize';
 import type { AppErrorInfo, PlaybackState, PlaybackStatus, ReadingDoc } from '@/shared/types';
 import { fastStartSplit } from './fast-start';
-import { concatenate, encodeWav, safeFilename } from './wav';
+import { concatenate, encodeWav, resample, safeFilename } from './wav';
 import { SynthesisQueue } from './synthesis-queue';
 
 interface Clip {
@@ -212,8 +216,10 @@ export class PlaybackController {
     };
     this.emit();
 
-    const language = detectLanguage(doc.sentences.slice(0, 40).map((s) => s.text).join(' '), doc.language);
-    if (language === 'unsupported-script' && config.engine === 'kokoro') {
+    const sample = doc.sentences.slice(0, 40).map((s) => s.text).join(' ');
+    const language = detectLanguage(sample, doc.language);
+    // Devanagari is read by the Nepali voice; other non-Latin scripts have no voice.
+    if (language === 'unsupported-script' && config.engine === 'kokoro' && devanagariShare(sample) < 0.25) {
       this.fail(new AppError('E_UNSUPPORTED_LANGUAGE', `Detected ${language}`));
       return;
     }
@@ -227,16 +233,29 @@ export class PlaybackController {
     void this.playFrom(this.session.index);
   }
 
-  private async prepareEngine(): Promise<KokoroProvider | null> {
+  /** Loads the engine and voice for the sentence playback starts at; other engines load when first needed. */
+  private async prepareEngine(): Promise<void> {
     const s = this.session;
-    if (!s) return null;
+    if (!s) return;
     if (s.config.engine === 'browser') {
       await this.deps.browser.initialize();
-      return null;
+      return;
     }
-    const provider = await this.deps.models.ensureReady(s.config.variantId, s.config.backend);
-    await this.deps.models.ensureVoice(s.config.voice);
-    return provider;
+    const voice = this.voiceFor(s.index);
+    await this.deps.models.providerFor(voice, s.config.variantId, s.config.backend);
+    await this.deps.models.ensureVoice(voice);
+  }
+
+  /** The voice that reads a sentence: the Nepali voice for Devanagari text, the main voice otherwise. */
+  private voiceFor(index: number): string {
+    const s = this.session!;
+    const text = s.doc.sentences[index]?.text ?? '';
+    return isNepaliText(text) && !isNepaliVoice(s.config.voice) ? s.config.nepaliVoice : s.config.voice;
+  }
+
+  private voicesKey(): string {
+    const s = this.session!;
+    return `${s.config.voice}|${s.config.nepaliVoice}`;
   }
 
   private haltAudio() {
@@ -270,7 +289,7 @@ export class PlaybackController {
 
   private clipKey(index: number): string {
     const s = this.session!;
-    return `${s.id}:${s.config.voice}:${index}`;
+    return `${s.id}:${this.voicesKey()}:${index}`;
   }
 
   private requestClip(index: number, priority: number): Promise<Clip> {
@@ -278,13 +297,15 @@ export class PlaybackController {
     const existing = this.clips.get(index);
     if (existing) return Promise.resolve(existing);
     const sentence = s.doc.sentences[index]!;
-    const voice = s.config.voice;
+    const voice = this.voiceFor(index);
+    const voices = this.voicesKey();
     const sessionId = s.id;
     return this.queue.enqueue<Clip>({
       key: this.clipKey(index),
       priority,
       run: async (signal) => {
-        const provider = await this.deps.models.ensureReady(s.config.variantId, s.config.backend);
+        const provider = await this.deps.models.providerFor(voice, s.config.variantId, s.config.backend);
+        await this.deps.models.ensureVoice(voice);
         const result = await provider.synthesize(sentence.text, { voice, speed: 1, signal });
         if (result.kind !== 'pcm') throw new AppError('E_SYNTHESIS', 'Expected PCM audio');
         const wav = encodeWav(result.samples, result.sampleRate);
@@ -295,7 +316,7 @@ export class PlaybackController {
           sampleRate: result.sampleRate,
           seconds: result.samples.length / result.sampleRate,
         };
-        if (this.session?.id !== sessionId || this.session.config.voice !== voice) {
+        if (this.session?.id !== sessionId || this.voicesKey() !== voices) {
           URL.revokeObjectURL(clip.url);
           throw new AppError('E_CANCELLED');
         }
@@ -307,6 +328,7 @@ export class PlaybackController {
           inferenceMs: result.inferenceMs,
           rtf: Math.round((result.inferenceMs / 1000 / Math.max(0.01, clip.seconds)) * 100) / 100,
           chars: sentence.text.length,
+          voice,
         });
         return clip;
       },
@@ -316,16 +338,18 @@ export class PlaybackController {
   /** Synthesizes one part of a sentence (fast start). */
   private synthPart(index: number, part: 'head' | 'tail', text: string, priority: number): Promise<Part> {
     const s = this.session!;
-    const voice = s.config.voice;
+    const voice = this.voiceFor(index);
+    const voices = this.voicesKey();
     const sessionId = s.id;
     return this.queue.enqueue<Part>({
       key: `${this.clipKey(index)}:${part}`,
       priority,
       run: async (signal) => {
-        const provider = await this.deps.models.ensureReady(s.config.variantId, s.config.backend);
+        const provider = await this.deps.models.providerFor(voice, s.config.variantId, s.config.backend);
+        await this.deps.models.ensureVoice(voice);
         const result = await provider.synthesize(text, { voice, speed: 1, signal });
         if (result.kind !== 'pcm') throw new AppError('E_SYNTHESIS', 'Expected PCM audio');
-        if (this.session?.id !== sessionId || this.session.config.voice !== voice) throw new AppError('E_CANCELLED');
+        if (this.session?.id !== sessionId || this.voicesKey() !== voices) throw new AppError('E_CANCELLED');
         const seconds = result.samples.length / result.sampleRate;
         this.session.generatedSeconds += seconds;
         this.session.generatedWords += countWords(text);
@@ -335,6 +359,7 @@ export class PlaybackController {
           rtf: Math.round((result.inferenceMs / 1000 / Math.max(0.01, seconds)) * 100) / 100,
           chars: text.length,
           part,
+          voice,
         });
         const wav = encodeWav(result.samples, result.sampleRate);
         return { url: URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })), samples: result.samples, sampleRate: result.sampleRate, seconds };
@@ -349,7 +374,7 @@ export class PlaybackController {
     const ahead = s.config.prefetchSentences;
     this.queue.rescore((key) => {
       const sentence = Number(key.split(':')[2]);
-      if (!key.startsWith(`${s.id}:${s.config.voice}:`) || sentence < index || sentence > index + ahead) return null;
+      if (!key.startsWith(`${s.id}:${this.voicesKey()}:`) || sentence < index || sentence > index + ahead) return null;
       return sentence - index;
     });
     for (let i = index + 1; i <= Math.min(s.doc.sentences.length - 1, index + ahead); i++) {
@@ -564,7 +589,7 @@ export class PlaybackController {
   async set({ rate, volume, voice, config }: { rate?: number; volume?: number; voice?: string; config?: EngineConfig }) {
     const s = this.session;
     if (!s) return;
-    if (config) s.config = { ...config, rate: s.config.rate, volume: s.config.volume, voice: s.config.voice };
+    if (config) s.config = { ...config, rate: s.config.rate, volume: s.config.volume, voice: s.config.voice, nepaliVoice: s.config.nepaliVoice };
     if (rate !== undefined) {
       s.config.rate = clampRate(rate);
       this.audio.playbackRate = s.config.rate;
@@ -573,7 +598,9 @@ export class PlaybackController {
       s.config.volume = clampVolume(volume);
       this.audio.volume = s.config.volume;
     }
-    const currentVoice = s.config.engine === 'browser' ? s.config.browserVoice : s.config.voice;
+    // A Nepali voice picked during a session replaces the Nepali voice, not the main one.
+    const nepali = s.config.engine === 'kokoro' && voice !== undefined && isNepaliVoice(voice) && !isNepaliVoice(s.config.voice);
+    const currentVoice = s.config.engine === 'browser' ? s.config.browserVoice : nepali ? s.config.nepaliVoice : s.config.voice;
     if (voice !== undefined && voice !== currentVoice) {
       const wasActive = s.status === 'playing' || s.status === 'buffering' || s.status === 'preparing';
       // Whatever is loaded or speaking is in the old voice; drop it.
@@ -586,7 +613,8 @@ export class PlaybackController {
       this.audio.load();
       if (s.config.engine === 'browser') s.config.browserVoice = voice;
       else {
-        s.config.voice = voice;
+        if (nepali) s.config.nepaliVoice = voice;
+        else s.config.voice = voice;
         this.queue.cancelAll();
         for (const clip of this.clips.values()) URL.revokeObjectURL(clip.url);
         this.clips.clear();
@@ -615,7 +643,7 @@ export class PlaybackController {
       await this.deps.browser.speak(text, voice, config.rate, config.volume);
       return;
     }
-    const provider = await this.deps.models.ensureReady(config.variantId, config.backend);
+    const provider = await this.deps.models.providerFor(voice, config.variantId, config.backend);
     await this.deps.models.ensureVoice(voice);
     const result = await this.queue.enqueue({
       key: `preview:${voice}:${Date.now()}`,
@@ -638,29 +666,32 @@ export class PlaybackController {
   async exportWav(doc: ReadingDoc, voice: string, speed: number, config: EngineConfig): Promise<ExportResult> {
     if (config.engine !== 'kokoro') throw new AppError('E_EXPORT', 'Audio export needs the Kokoro engine');
     if (!doc.sentences.length) throw new AppError('E_EMPTY_TEXT');
-    const provider = await this.deps.models.ensureReady(config.variantId, config.backend);
-    await this.deps.models.ensureVoice(voice);
     const exportId = `export:${Date.now()}`;
     const pieces: Float32Array[] = [];
-    let sampleRate = 24_000;
+    // Kokoro speaks at 24 kHz and the Nepali voices at 22.05 kHz; a mixed export is resampled to 24 kHz.
+    const sampleRate = 24_000;
+    const voices = new Set<string>();
     let previousBlock: number | null = null;
     for (const sentence of doc.sentences) {
+      const sentenceVoice = isNepaliText(sentence.text) && !isNepaliVoice(voice) ? config.nepaliVoice : voice;
+      voices.add(sentenceVoice);
+      const provider = await this.deps.models.providerFor(sentenceVoice, config.variantId, config.backend);
+      await this.deps.models.ensureVoice(sentenceVoice);
       const audio = await this.queue.enqueue({
         key: `${exportId}:${sentence.id}`,
         priority: 1000 + sentence.id,
-        run: (signal) => provider.synthesize(sentence.text, { voice, speed, signal }),
+        run: (signal) => provider.synthesize(sentence.text, { voice: sentenceVoice, speed, signal }),
       });
       this.queue.forget(`${exportId}:${sentence.id}`);
       if (audio.kind !== 'pcm') throw new AppError('E_EXPORT');
-      sampleRate = audio.sampleRate;
       if (previousBlock !== null && previousBlock !== sentence.blockId) pieces.push(new Float32Array(Math.round(0.35 * sampleRate)));
-      pieces.push(audio.samples);
+      pieces.push(resample(audio.samples, audio.sampleRate, sampleRate));
       previousBlock = sentence.blockId;
     }
     const samples = concatenate(pieces, sampleRate, 0.12);
     const wav = encodeWav(samples, sampleRate, {
       title: doc.title,
-      artist: `Kokoro-82M (${voice})`,
+      artist: [...voices].map((id) => (isNepaliVoice(id) ? `Piper (${id})` : `Kokoro-82M (${id})`)).join(', '),
       software: 'Kokoro Reader',
       date: new Date().toISOString().slice(0, 10),
     });

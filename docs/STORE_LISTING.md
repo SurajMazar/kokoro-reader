@@ -7,7 +7,7 @@ Listen to any webpage with natural AI speech generated privately on your device 
 
 **Category:** Accessibility (alternatively: Productivity)
 
-**Language:** English
+**Language:** English (listing). The extension reads English and Nepali.
 
 ## Description
 
@@ -25,6 +25,7 @@ LISTEN YOUR WAY
 • Read entire pages, or start from any paragraph
 • Smart Reader with table of contents and progress
 • 28 English voices (US and UK), favorites and voice profiles
+• 19 Nepali voices: Nepali text is detected and read automatically, even on pages that mix Nepali and English
 • Speed from 0.5× to 3× with natural pitch
 • Sentence and paragraph highlighting that follows along
 • Keeps playing when you switch tabs; control it from the popup or side panel
@@ -35,7 +36,7 @@ LISTEN YOUR WAY
 FAST
 Kokoro Reader uses WebGPU when your device supports it, and multithreaded WebAssembly otherwise. On a modern laptop it speaks faster than real time.
 
-Kokoro Reader currently reads English text.
+Kokoro Reader reads English and Nepali text.
 
 ## Screenshots (1280×800)
 

@@ -24,10 +24,13 @@ export type ControlAction =
 export type ReadMode = 'selection' | 'page' | 'from-selection' | 'article';
 
 export type ModelAction = 'download' | 'pause' | 'cancel' | 'clear' | 'validate' | 'initialize' | 'unload';
+export type PackAction = 'download' | 'delete';
 
 export interface EngineConfig {
   engine: EngineId;
   voice: string;
+  /** Voice for Devanagari (Nepali) sentences; the main voice reads the rest. */
+  nepaliVoice: string;
   browserVoice: string | null;
   rate: number;
   volume: number;
@@ -82,6 +85,8 @@ export interface RequestMap {
   'reader/open': [{ tabId?: number; mode?: 'article' | 'custom' }, null];
   'model/get': [Record<string, never>, ModelState];
   'model/action': [{ action: ModelAction; variantId?: string }, ModelState];
+  /** Downloads or deletes an optional voice pack (Nepali voices). */
+  'model/pack': [{ action: PackAction; packId: string }, ModelState];
   'voices/list': [Record<string, never>, VoiceInfo[]];
   'voices/preview': [{ voice: string; engine?: EngineId; text?: string }, null];
   'export/wav': [{ doc: ReadingDoc; voice?: string; speed?: number }, ExportResult];
@@ -98,6 +103,7 @@ export interface RequestMap {
   'offscreen/set': [{ rate?: number; volume?: number; voice?: string; config?: EngineConfig }, null];
   'offscreen/model': [{ action: ModelAction; variantId: string; backend: BackendPreference }, ModelState];
   'offscreen/model-state': [{ variantId: string }, ModelState];
+  'offscreen/pack': [{ action: PackAction; packId: string; variantId: string }, ModelState];
   'offscreen/preview': [{ voice: string; engine: EngineId; text: string; config: EngineConfig }, null];
   'offscreen/export': [{ doc: ReadingDoc; voice: string; speed: number; config: EngineConfig }, ExportResult];
   'offscreen/browser-voices': [Record<string, never>, VoiceInfo[]];

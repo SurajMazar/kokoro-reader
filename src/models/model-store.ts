@@ -60,6 +60,12 @@ export async function clearModelCache(): Promise<void> {
   await deletePartials();
 }
 
+/** Removes one verified file and any partial download of it. */
+export async function deleteCached(path: string): Promise<void> {
+  await (await openCache()).delete(fileUrl(path));
+  await deletePartials(path);
+}
+
 /** Re-hashes a cached file; removes it when it no longer matches. */
 export async function validateCached(path: string): Promise<boolean> {
   const response = await readCached(path);

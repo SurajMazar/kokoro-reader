@@ -82,6 +82,16 @@ export interface DownloadProgress {
   file?: string;
 }
 
+export type VoicePackStatus = 'not-downloaded' | 'downloading' | 'downloaded' | 'error';
+
+/** An optional voice pack (one Piper model, e.g. the Nepali voices). */
+export interface VoicePackState {
+  status: VoicePackStatus;
+  progress: DownloadProgress | null;
+  bytes: number;
+  error: AppErrorInfo | null;
+}
+
 export interface ModelState {
   variantId: string;
   status: ModelStatus;
@@ -94,6 +104,8 @@ export interface ModelState {
   lastUsed: number | null;
   initMs: number | null;
   error: AppErrorInfo | null;
+  /** Optional voice packs by pack id. */
+  packs: Record<string, VoicePackState>;
 }
 
 export interface VoiceInfo {
