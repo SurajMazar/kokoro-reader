@@ -15,11 +15,12 @@
  */
 import type { BrowserSpeechProvider } from '@/engine/fallback/browser-speech-provider';
 import { isNepaliVoice } from '@/engine/piper/voices';
+import { isNepaliDocument, voiceForSentence } from './voice-routing';
 import type { ModelManager } from '@/models/model-manager';
 import type { ControlAction, EngineConfig, ExportResult } from '@/shared/messages/contract';
 import { clampRate, clampVolume } from '@/shared/settings';
 import { AppError, toErrorInfo } from '@/shared/errors';
-import { detectLanguage, devanagariShare, isNepaliText } from '@/shared/text/language';
+import { detectLanguage, devanagariShare } from '@/shared/text/language';
 import { countWords, WORDS_PER_SECOND_AT_1X } from '@/shared/text/normalize';
 import type { AppErrorInfo, PlaybackState, PlaybackStatus, ReadingDoc } from '@/shared/types';
 import { fastStartSplit } from './fast-start';
@@ -59,6 +60,8 @@ interface Session {
   generatedWords: number;
   requestedAt: number;
   firstAudioAt: number | null;
+  /** Most sentences are Nepali: short non-Nepali fragments stay with the Nepali voice. */
+  nepaliDocument: boolean;
 }
 
 export interface PlaybackDeps {
@@ -168,6 +171,7 @@ export class PlaybackController {
       blockId: sentence?.blockId ?? null,
       engine: s.config.engine,
       voice: s.config.engine === 'browser' ? (s.config.browserVoice ?? 'system') : s.config.voice,
+      ...(s.config.engine === 'kokoro' && sentence ? { speakingVoice: this.voiceFor(s.index) } : {}),
       rate: s.config.rate,
       volume: s.config.volume,
       generatedSeconds: Math.round(s.generatedSeconds),
@@ -213,6 +217,7 @@ export class PlaybackController {
       generatedWords: 0,
       requestedAt: performance.now(),
       firstAudioAt: null,
+      nepaliDocument: isNepaliDocument(doc.sentences),
     };
     this.emit();
 
@@ -246,11 +251,10 @@ export class PlaybackController {
     await this.deps.models.ensureVoice(voice);
   }
 
-  /** The voice that reads a sentence: the Nepali voice for Devanagari text, the main voice otherwise. */
+  /** The voice that reads a sentence (see voice-routing.ts). */
   private voiceFor(index: number): string {
     const s = this.session!;
-    const text = s.doc.sentences[index]?.text ?? '';
-    return isNepaliText(text) && !isNepaliVoice(s.config.voice) ? s.config.nepaliVoice : s.config.voice;
+    return voiceForSentence(s.doc.sentences[index]?.text ?? '', s.config.voice, s.config.nepaliVoice, s.nepaliDocument);
   }
 
   private voicesKey(): string {
@@ -671,9 +675,10 @@ export class PlaybackController {
     // Kokoro speaks at 24 kHz and the Nepali voices at 22.05 kHz; a mixed export is resampled to 24 kHz.
     const sampleRate = 24_000;
     const voices = new Set<string>();
+    const nepaliDocument = isNepaliDocument(doc.sentences);
     let previousBlock: number | null = null;
     for (const sentence of doc.sentences) {
-      const sentenceVoice = isNepaliText(sentence.text) && !isNepaliVoice(voice) ? config.nepaliVoice : voice;
+      const sentenceVoice = voiceForSentence(sentence.text, voice, config.nepaliVoice, nepaliDocument);
       voices.add(sentenceVoice);
       const provider = await this.deps.models.providerFor(sentenceVoice, config.variantId, config.backend);
       await this.deps.models.ensureVoice(sentenceVoice);

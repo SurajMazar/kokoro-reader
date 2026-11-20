@@ -281,10 +281,14 @@ describe('PlaybackController', () => {
       blocks: [{ kind: 'paragraph', text: 'Hello there. नमस्ते, तपाईंलाई कस्तो छ? Goodbye now.' }],
     });
     await t.controller.load('s1', mixed, 0, config);
+    const speaking: (string | undefined)[] = [];
     for (let i = 0; i < 3; i++) {
-      await t.until((s) => s.sentenceIndex === i && s.status === 'playing');
+      speaking.push((await t.until((s) => s.sentenceIndex === i && s.status === 'playing')).speakingVoice);
       t.audio.finish();
     }
+    // The player names the voice actually reading, while the main voice stays selected.
+    expect(speaking).toEqual(['af_heart', 'ne_chitwan', 'af_heart']);
+    expect(t.last().voice).toBe('af_heart');
     await t.until((s) => s.status === 'ended');
     expect(t.log).toEqual(['af_heart:Hello there.', 'ne_chitwan:नमस्ते, तपाईंलाई कस्तो छ?', 'af_heart:Goodbye now.']);
     // Each sentence asked for the engine of its own voice.
@@ -303,14 +307,14 @@ describe('PlaybackController', () => {
 
   it('picking a Nepali voice mid-session changes the Nepali voice, not the main voice', async () => {
     const t = setup();
-    const mixed = buildDoc({ title: 'Mixed', source: 'custom', blocks: [{ kind: 'paragraph', text: 'नमस्ते साथी। Hello friend.' }] });
+    const mixed = buildDoc({ title: 'Mixed', source: 'custom', blocks: [{ kind: 'paragraph', text: 'नमस्ते साथी। Hello friend, how are you today?' }] });
     await t.controller.load('s1', mixed, 0, config);
     await t.until((s) => s.status === 'playing');
     await t.controller.set({ voice: 'ne_google_03' });
     await t.until(() => t.log.includes('ne_google_03:नमस्ते साथी।'));
     expect(t.last().voice).toBe('af_heart');
     t.audio.finish();
-    await t.until(() => t.log.includes('af_heart:Hello friend.'));
+    await t.until(() => t.log.includes('af_heart:Hello friend, how are you today?'));
   });
 
   it('exports a mixed document as one 24 kHz file', async () => {

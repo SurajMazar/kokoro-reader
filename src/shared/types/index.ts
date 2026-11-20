@@ -56,6 +56,8 @@ export interface PlaybackState {
   blockId: number | null;
   engine: EngineId;
   voice: string;
+  /** The voice reading the current sentence (the Nepali voice on a Nepali sentence); defaults to `voice`. */
+  speakingVoice?: string;
   rate: number;
   volume: number;
   /** Seconds of audio generated for the session so far. */

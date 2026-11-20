@@ -60,6 +60,8 @@ const REQUEST_VALIDATORS: Record<RequestType, Check> = {
   'bookmark/add': shape({ name: optional(isString) }),
   'history/resume': shape({ id: isString }),
   'diagnostics/metrics': isObject,
+  'update/check': shape({ force: optional(isBoolean) }),
+  'update/reload': isObject,
   'offscreen/load': shape({ sessionId: isString, doc: isReadingDoc, startSentence: isNumber, config: isObject }),
   'offscreen/control': shape({ sessionId: optional(isString), action: controlAction, index: optional(isNumber) }),
   'offscreen/set': shape({ rate: optional(isNumber), volume: optional(isNumber), voice: optional(isString), config: optional(isObject) }),

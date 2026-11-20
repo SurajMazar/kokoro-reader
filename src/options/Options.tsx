@@ -1,3 +1,4 @@
+import { UpdatePanel } from '@/ui/components/UpdateNotice';
 import {
   Accessibility,
   AudioLines,
@@ -274,11 +275,12 @@ function SectionBody({ section, settings, update }: { section: SectionId; settin
       return (
         <Group title="About Kokoro Reader">
           <div className="space-y-2 py-3 text-[13px] leading-relaxed">
-            <p>Version {chrome.runtime.getManifest().version}. A local-first reading assistant powered by Kokoro-82M.</p>
+            <p>Version {chrome.runtime.getManifest().version}. A local-first reading assistant powered by Kokoro-82M, with Nepali voices from Piper.</p>
+            <UpdatePanel />
             <p>
               Model: <code>{MODEL_REPOSITORY}</code> at revision <code>{MODEL_REVISION.slice(0, 12)}</code>, licensed {MODEL_LICENSE}. Kokoro-82M by hexgrad. ONNX export by onnx-community.
             </p>
-            <p>Phonemization: espeak-ng compiled to WebAssembly via the phonemizer package; text normalization ported from kokoro-js (Apache-2.0).</p>
+            <p>Phonemization: espeak-ng compiled to WebAssembly (the phonemizer package for English, a Nepali build for the Piper voices); text normalization ported from kokoro-js (Apache-2.0).</p>
             <p>Inference: ONNX Runtime Web via transformers.js. Article extraction: Mozilla Readability.</p>
           </div>
         </Group>

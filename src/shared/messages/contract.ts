@@ -5,6 +5,7 @@
  * `target` says which context handles it, because chrome.runtime.sendMessage
  * reaches every extension page at once. Replies are `{ ok, data | error }`.
  */
+import type { UpdateInfo } from '../updates';
 import type { AppErrorInfo, BackendPreference, Bookmark, DiagnosticEvent, EngineId, ModelState, PlaybackState, ReadingDoc, VoiceInfo } from '../types';
 
 export type Target = 'background' | 'offscreen' | 'content' | 'broadcast';
@@ -96,6 +97,10 @@ export interface RequestMap {
   'bookmark/add': [{ name?: string }, Bookmark];
   'history/resume': [{ id: string }, null];
   'diagnostics/metrics': [Record<string, never>, EngineMetrics | null];
+  /** Unpacked installs: is a newer build available? (Web Store installs update through Chrome.) */
+  'update/check': [{ force?: boolean }, UpdateInfo];
+  /** Reloads the extension from disk, e.g. after an unpacked install's files were replaced. */
+  'update/reload': [Record<string, never>, null];
 
   // Handled by the offscreen document.
   'offscreen/load': [{ sessionId: string; doc: ReadingDoc; startSentence: number; config: EngineConfig }, null];

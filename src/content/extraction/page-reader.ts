@@ -1,5 +1,5 @@
 import { AppError } from '@/shared/errors';
-import { collectBlocks, findContentRoot, type Collected, type TextMap } from '@/shared/extraction/collect';
+import { collectBlocks, concatCollected, findContentRoot, findTitleElement, proseBounds, sliceCollected, type Collected, type TextMap } from '@/shared/extraction/collect';
 import type { PageSnapshot } from '@/shared/messages/contract';
 import { buildDoc } from '@/shared/text/doc';
 import type { ReadingDoc } from '@/shared/types';
@@ -65,12 +65,27 @@ export function readRange(range: Range, fallbackText = range.toString()): LiveDo
   return live.doc.sentences.length ? live : null;
 }
 
-/** Reads the page's main content (or the whole body) in DOM order. */
+/**
+ * Reads the page's main content in DOM order, starting with its headline.
+ * When no single container holds the article (the root is <body>), reading
+ * runs from the headline (or first paragraph) to the last paragraph.
+ */
 export function readPage(): LiveDoc {
+  const options = { live: true, dropFurniture: true, includeCode: false };
+  const body = document.body;
   const root = findContentRoot(document);
-  let collected = collectBlocks(root, { live: true, dropFurniture: true, includeCode: false });
-  if (!collected.blocks.length && root !== document.body) {
-    collected = collectBlocks(document.body, { live: true, dropFurniture: true, includeCode: false });
+  const title = findTitleElement(document);
+  let collected = collectBlocks(root, options);
+  if (!collected.blocks.length && root !== body) collected = collectBlocks(body, options);
+  else if (root === body) {
+    const bounds = proseBounds(body);
+    if (bounds) {
+      const titleFirst = title && Boolean(title.compareDocumentPosition(bounds[0]) & Node.DOCUMENT_POSITION_FOLLOWING);
+      collected = sliceCollected(collected, titleFirst ? title : bounds[0], bounds[1]);
+    }
+  } else if (title && !root.contains(title) && title.compareDocumentPosition(root) & Node.DOCUMENT_POSITION_FOLLOWING) {
+    // The headline sits above the article body (outside the content root): read it first.
+    collected = concatCollected([collectBlocks(title, { ...options, dropFurniture: false }), collected]);
   }
   const live = toLiveDoc(collected, 'page', pageTitle());
   if (!live.doc.sentences.length) throw new AppError('E_EXTRACTION');

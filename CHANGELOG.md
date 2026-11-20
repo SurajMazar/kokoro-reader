@@ -2,6 +2,17 @@
 
 All notable changes are documented here. The project follows [Semantic Versioning](https://semver.org/): the extension's `manifest.json` version always equals `package.json`'s.
 
+## 0.3.0 — 2026-11-20
+
+### Fixed: reading Nepali news sites
+- **Read page** now finds the article on real news layouts: the deepest element holding most of the page's prose, with the headline read first. Before, onlinekhabar started with a live cricket score and a news ticker, ekantipur stopped after the first 3 of 36 paragraphs (its story is split into 12 sections), and setopati skipped the story entirely (its body is inside an `<aside>`).
+- On a mostly-Nepali page, scores, "vs" and short English fragments stay with the Nepali voice instead of switching engines (and downloading the 92 MB English model) for a scrap of text.
+- The player shows what it is waiting for: "Downloading the Nepali voice 35% · 21 MB of 60 MB (first use only)" instead of a bare "Preparing voice…", also when the download starts mid-reading.
+- The player names the voice actually reading (Chitwan on a Nepali sentence), not the main English voice.
+
+### Updates for unpacked installs
+- Copies loaded unpacked (which Chrome cannot update) check GitHub once a day for a newer version and show how to update in place, keeping settings and downloaded voices. Web Store copies never check; Chrome updates them.
+
 ## 0.2.0 — 2026-11-18
 
 ### Nepali

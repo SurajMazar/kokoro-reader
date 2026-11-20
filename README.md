@@ -37,11 +37,17 @@ Measured on an Apple M4; details and method in [docs/performance](docs/performan
 
 ## Install
 
+### From the Chrome Web Store (recommended)
+
+Install [Kokoro Reader from the Chrome Web Store](https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj). Chrome keeps it up to date automatically.
+
 ### From a release ZIP
 
 1. Download `kokoro-reader-<version>.zip` from [Releases](https://github.com/SurajMazar/kokoro-reader/releases) and unzip it.
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose the unzipped folder.
 3. The welcome page opens. Optionally turn on the speaker button for text selections (this asks for access to all sites) and download the model (92 MB, once).
+
+Chrome never updates an unpacked extension. When a newer build exists, Kokoro Reader shows a notice in its popup and under **Settings → About**. To update, unzip the new ZIP into the same folder, replacing the files, then click **Reload** there (or in `chrome://extensions`). Do not remove the extension to update it: removing it also deletes the downloaded voices and your settings.
 
 ### Uploading to the Chrome Web Store
 
@@ -112,7 +118,7 @@ vendor/         espeak-ng (Nepali) compiled to WebAssembly by scripts/espeak/bui
 
 ## Tests
 
-- **93 unit and integration tests**: text segmentation and normalization, Nepali detection, phonemes checked against native espeak-ng and phoneme ids against piper-tts itself, per-sentence voice routing, message validation, settings, errors, WAV encoding, the synthesis queue, DOM extraction against the fixture sites, verified downloads with resume and corruption recovery, and the full playback pipeline with a fake engine.
+- **107 unit and integration tests**: text segmentation and normalization, article detection on real news-site layouts, Nepali detection and voice routing, update checks, phonemes checked against native espeak-ng and phoneme ids against piper-tts itself, per-sentence voice routing, message validation, settings, errors, WAV encoding, the synthesis queue, DOM extraction against the fixture sites, verified downloads with resume and corruption recovery, and the full playback pipeline with a fake engine.
 - **14 end-to-end tests** in real Chromium with real inference: select-and-click playback, a mixed Nepali and English page with real Piper inference and Nepali WAV export, page reading with highlighting, every player control, cross-tab playback, session replacement without stale audio, recovery after the audio engine is unloaded, dynamic/SPA/RTL pages, floating-button placement in nested scroll containers, the Smart Reader, WAV export validity (header, duration, non-silent), and model cache persistence across a browser restart with corruption recovery.
 - **Speech verification**: Whisper transcribes exported audio for each supported configuration (0 % word error rate).
 
@@ -129,11 +135,11 @@ vendor/         espeak-ng (Nepali) compiled to WebAssembly by scripts/espeak/bui
 - **Import** supports plain text, Markdown and HTML. PDF and Word files must be converted to text first.
 - **Context menu and keyboard shortcuts** are implemented but not exercised by the automated tests (Playwright cannot open native menus or trigger Chrome commands); their code paths are shared with tested ones.
 - The **browser speech** fallback depends on the operating system's voices and is not covered by automated tests.
-- Not yet published on the Chrome Web Store; listing materials are in [docs/STORE_LISTING.md](docs/STORE_LISTING.md).
+- Store updates go through Google's review, so a release reaches Web Store users a few days after it appears on GitHub. Listing materials are in [docs/STORE_LISTING.md](docs/STORE_LISTING.md).
 
 ## Privacy and security
 
-Text is processed locally and never transmitted. The only network traffic is the one-time download of the model and any Nepali voice pack from Hugging Face, verified by SHA-256. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
+Text is processed locally and never transmitted. The only network traffic is the one-time download of the model and any Nepali voice pack from Hugging Face, verified by SHA-256, and, for unpacked installs only, a daily check of the latest version number on GitHub. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md) and [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## License and credits
 

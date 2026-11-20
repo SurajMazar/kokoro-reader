@@ -2,7 +2,8 @@ import { request } from '@/shared/messages/bus';
 import type { ControlAction } from '@/shared/messages/contract';
 import { SPEED_PRESETS, type PlayerMode, type Settings } from '@/shared/settings';
 import type { ModelState, PlaybackState, VoiceInfo } from '@/shared/types';
-import { formatDuration, formatBytes } from '@/shared/utils/format';
+import { waitingText } from '@/shared/engine-status';
+import { formatDuration } from '@/shared/utils/format';
 import { icon } from './icons';
 import { h, setIcon, type OverlayRoot } from './shadow-root';
 
@@ -97,16 +98,7 @@ export class FloatingPlayer {
       const line = h('div', { class: 'status-line', role: 'status' });
       const spinner = h('span', { class: 'spin' });
       setIcon(spinner, icon('loader', 13));
-      let text = state.status === 'buffering' ? 'Generating speech…' : 'Preparing voice…';
-      const model = this.model;
-      if (state.status === 'preparing' && model?.status === 'downloading' && model.progress) {
-        const pct = Math.floor((model.progress.loaded / Math.max(1, model.progress.total)) * 100);
-        text = `Downloading Kokoro model ${pct}% · ${formatBytes(model.progress.loaded)} of ${formatBytes(model.progress.total)}`;
-      } else if (state.status === 'preparing' && model?.status === 'initializing') {
-        text = 'Starting the speech engine…';
-      } else if (state.status === 'preparing' && model?.status === 'verifying') {
-        text = 'Verifying model files…';
-      }
+      const text = waitingText(state.status, this.model);
       line.append(spinner, h('span', {}, [text]));
       return line;
     }
@@ -149,7 +141,7 @@ export class FloatingPlayer {
 
     const badge = h('div', { class: 'badge', 'aria-hidden': 'true' });
     setIcon(badge, icon('speaker', 16));
-    const sub = `${state.engine === 'browser' ? 'Browser voice' : this.voiceName(state.voice)} · ${state.rate}×`;
+    const sub = `${state.engine === 'browser' ? 'Browser voice' : this.voiceName(state.speakingVoice ?? state.voice)} · ${state.rate}×`;
     const header = h('div', { class: 'header' }, [
       badge,
       h('div', { class: 'titles' }, [h('div', { class: 'title' }, [state.title || 'Kokoro Reader']), h('div', { class: 'subtitle' }, [sub])]),
@@ -227,7 +219,7 @@ export class FloatingPlayer {
       const list = this.voices.length ? this.voices : [{ id: state.voice, name: this.voiceName(state.voice), languageLabel: '' } as VoiceInfo];
       for (const option of list) {
         const element = h('option', { value: option.id }, [option.languageLabel ? `${option.name} · ${option.languageLabel}` : option.name]);
-        if (option.id === state.voice) element.setAttribute('selected', '');
+        if (option.id === (state.speakingVoice ?? state.voice)) element.setAttribute('selected', '');
         voice.append(element);
       }
       voice.addEventListener('change', () => this.set({ voice: voice.value }));

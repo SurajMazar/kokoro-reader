@@ -103,3 +103,49 @@ describe('resample', () => {
     expect(resample(tone, 24_000, 24_000)).toBe(tone);
   });
 });
+
+describe('voice routing', async () => {
+  const { isNepaliDocument, voiceForSentence } = await import('@/audio/voice-routing');
+  const route = (text: string, nepaliDocument: boolean) => voiceForSentence(text, 'af_heart', 'ne_chitwan', nepaliDocument);
+
+  it('keeps scores and short English fragments of a Nepali page with the Nepali voice', () => {
+    expect(route('0/0', true)).toBe('ne_chitwan');
+    expect(route('vs', true)).toBe('ne_chitwan');
+    expect(route('TU INTERNATIONAL CRICKET STADIUM', true)).toBe('ne_chitwan');
+    expect(route('The minister spoke to reporters on Friday morning.', true)).toBe('af_heart');
+  });
+
+  it('reads English pages in English, apart from Nepali sentences', () => {
+    expect(route('0/0', false)).toBe('af_heart');
+    expect(route('Score: 3-1.', false)).toBe('af_heart');
+    expect(route('नमस्ते साथी।', false)).toBe('ne_chitwan');
+  });
+
+  it('a Nepali main voice reads everything', () => {
+    expect(voiceForSentence('Hello there, everyone in the room today.', 'ne_google_02', 'ne_chitwan', false)).toBe('ne_google_02');
+  });
+
+  it('judges the document by its worded sentences', () => {
+    expect(isNepaliDocument([{ text: 'नेपाल।' }, { text: '0/0' }, { text: 'vs' }, { text: 'काठमाडौं।' }])).toBe(true);
+    expect(isNepaliDocument([{ text: 'Hello.' }, { text: 'नमस्ते।' }, { text: 'Bye now.' }])).toBe(false);
+  });
+});
+
+describe('waitingText', async () => {
+  const { waitingText } = await import('@/shared/engine-status');
+  const base = { status: 'ready', progress: null, packs: {} } as unknown as import('@/shared/types').ModelState;
+
+  it('explains a first-use Nepali voice download instead of "Preparing voice…"', () => {
+    const model = { ...base, packs: { 'ne-chitwan': { status: 'downloading', progress: { loaded: 21 * 2 ** 20, total: 60 * 2 ** 20 }, bytes: 60 * 2 ** 20, error: null } } } as typeof base;
+    expect(waitingText('preparing', model)).toBe('Downloading the Nepali voice 35% · 21 MB of 60 MB (first use only)');
+    // Mid-session (buffering) downloads are explained too.
+    expect(waitingText('buffering', model)).toMatch(/^Downloading the Nepali voice/);
+  });
+
+  it('falls back to the engine step, then to the generic text', () => {
+    expect(waitingText('preparing', { ...base, status: 'downloading', progress: { loaded: 50, total: 100 } })).toMatch(/^Downloading the Kokoro model 50%/);
+    expect(waitingText('preparing', { ...base, status: 'initializing' })).toBe('Starting the speech engine…');
+    expect(waitingText('preparing', base)).toBe('Preparing voice…');
+    expect(waitingText('buffering', null)).toBe('Generating speech…');
+  });
+});

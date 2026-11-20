@@ -1,6 +1,6 @@
 {
   "name": "kokoro-reader",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Listen to any webpage with natural AI speech generated locally by Kokoro-82M (ONNX) — a privacy-first Chrome extension.",
   "main": "index.js",
   "scripts": {

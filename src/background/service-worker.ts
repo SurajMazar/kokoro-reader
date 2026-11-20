@@ -4,6 +4,7 @@
  * Chrome suspends it when idle; state lives in chrome.storage and in the
  * offscreen document.
  */
+import { checkForUpdate } from '@/shared/updates';
 import { KOKORO_VOICES } from '@/engine/kokoro/voices';
 import { isNepaliVoice, NEPALI_VOICES, packBytes, VOICE_PACKS } from '@/engine/piper/voices';
 import { emitToTab, listen, request, requestTab } from '@/shared/messages/bus';
@@ -171,6 +172,12 @@ listen({
     },
     'permissions/sync': async () => syncContentScriptRegistration((await getSettings()).floatingButton),
     'session/doc': async () => (await getActiveSession())?.doc ?? null,
+    'update/check': ({ force }) => checkForUpdate(force ?? false),
+    'update/reload': async () => {
+      // Reply first; reloading ends this service worker.
+      setTimeout(() => chrome.runtime.reload(), 100);
+      return null;
+    },
     'diagnostics/metrics': async () => ((await hasOffscreenDocument()) ? request('offscreen/metrics', {}) : null),
     'bookmark/add': async ({ name }) => {
       const active = await getActiveSession();
@@ -385,6 +392,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onStartup.addListener(() => {
   createMenus();
+  void checkForUpdate().catch(() => undefined);
   void getSettings().then((settings) => syncContentScriptRegistration(settings.floatingButton));
 });
 

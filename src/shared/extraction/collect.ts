@@ -218,44 +218,145 @@ export function rangeForSpan(map: TextMap, start: number, end: number): Range | 
   return range;
 }
 
+/** Paragraphs long enough to be article prose rather than captions, labels or teasers. */
+export const PROSE_MIN_CHARS = 40;
+
+function proseParagraphs(doc: Document): HTMLParagraphElement[] {
+  return Array.from(doc.querySelectorAll('p')).filter((p) => (p.textContent ?? '').trim().length >= PROSE_MIN_CHARS);
+}
+
 /**
- * Picks the element holding the page's main content: an explicit article or
- * main landmark when it has real text, otherwise the container with the most
- * paragraph text, otherwise <body>.
+ * Picks the element holding the page's main content: the deepest element
+ * that contains most (60 %) of the page's prose, widened while its parent
+ * adds a large share (20 %) more. Pages too short to judge use an article
+ * or main landmark, or <body>.
+ *
+ * Landmarks and furniture tags are deliberately not trusted here. News sites
+ * wrap whole pages in <main> together with score widgets and tickers
+ * (onlinekhabar), split one story into sibling sections under <body>
+ * (ekantipur), or put the story itself in an <aside> (setopati).
  */
 export function findContentRoot(doc: Document): Element {
   const body = doc.body ?? doc.documentElement;
-  const textLength = (element: Element) =>
-    Array.from(element.querySelectorAll('p'), (p) => (p.textContent ?? '').trim().length).reduce((a, b) => a + b, 0);
-
-  const landmarks = Array.from(doc.querySelectorAll('article, main, [role="main"], [itemprop="articleBody"]'));
-  let best: Element | null = null;
-  let bestScore = 0;
-  for (const candidate of landmarks) {
-    const score = textLength(candidate);
-    if (score > bestScore) {
-      best = candidate;
-      bestScore = score;
-    }
-  }
-  if (best && bestScore >= 400) return best;
-
-  const scores = new Map<Element, number>();
-  for (const p of Array.from(doc.querySelectorAll('p'))) {
+  const sums = new Map<Element, { chars: number; paragraphs: number }>();
+  let total = 0;
+  for (const p of proseParagraphs(doc)) {
     const length = (p.textContent ?? '').trim().length;
-    if (length < 40) continue;
-    const parent = p.parentElement;
-    if (parent) scores.set(parent, (scores.get(parent) ?? 0) + length);
-    const grandparent = parent?.parentElement;
-    if (grandparent) scores.set(grandparent, (scores.get(grandparent) ?? 0) + length / 2);
-  }
-  let top: Element | null = null;
-  let topScore = 0;
-  for (const [element, score] of scores) {
-    if (score > topScore) {
-      top = element;
-      topScore = score;
+    total += length;
+    for (let element = p.parentElement; element; element = element.parentElement) {
+      const entry = sums.get(element) ?? { chars: 0, paragraphs: 0 };
+      entry.chars += length;
+      entry.paragraphs += 1;
+      sums.set(element, entry);
+      if (element === body) break;
     }
   }
-  return top && topScore >= 400 ? top : body;
+
+  if (total < 400) {
+    const landmark = Array.from(doc.querySelectorAll('article, main, [role="main"], [itemprop="articleBody"]')).find(
+      (element) => (element.textContent ?? '').trim().length >= 200,
+    );
+    return landmark ?? body;
+  }
+
+  const depth = (element: Element) => {
+    let d = 0;
+    for (let e: Element | null = element; e; e = e.parentElement) d++;
+    return d;
+  };
+  let best: Element = body;
+  let bestDepth = -1;
+  for (const [element, entry] of sums) {
+    if (entry.chars < 0.6 * total) continue;
+    const d = depth(element);
+    if (d > bestDepth) {
+      best = element;
+      bestDepth = d;
+    }
+  }
+  // A lone long paragraph in its own wrapper is not the article: widen while
+  // the root holds one paragraph, or the parent brings in much more prose.
+  while (best !== body && best.parentElement) {
+    const here = sums.get(best)!;
+    const parent = sums.get(best.parentElement);
+    if (!parent) break;
+    if (here.paragraphs < 2 || parent.chars - here.chars >= 0.2 * total) best = best.parentElement;
+    else break;
+  }
+  return best;
+}
+
+/**
+ * The article's headline: an <h1> whose text matches the page title (many
+ * sites put their logo in an <h1>), or else the element whose text is the
+ * og:title (some sites style a <div> as the headline).
+ */
+export function findTitleElement(doc: Document): Element | null {
+  const clean = (text: string | null | undefined) => (text ?? '').replace(/\s+/g, ' ').trim();
+  const og = clean(doc.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.content);
+  const pageTitle = og || clean(doc.title);
+  if (!pageTitle || !doc.body) return null;
+  const h1 = Array.from(doc.querySelectorAll('h1')).find((element) => {
+    const text = clean(element.textContent);
+    return text.length >= 8 && !element.closest('a') && (pageTitle.includes(text) || text.includes(pageTitle));
+  });
+  if (h1) return h1;
+  if (!og) return null;
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
+  let match: Element | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const element = node as Element;
+    if (ALWAYS_SKIP.has(element.tagName.toUpperCase()) || element.closest('a')) continue;
+    if (clean(element.textContent) === og) match = element;
+    else if (match && !match.contains(element)) break;
+  }
+  return match;
+}
+
+/** Concatenates collected blocks, as if they had been collected in one pass. */
+export function concatCollected(parts: Collected[]): Collected {
+  const result: Collected = { blocks: [], maps: [], nodePositions: new Map() };
+  for (const part of parts) {
+    const offset = result.blocks.length;
+    result.blocks.push(...part.blocks);
+    result.maps.push(...part.maps);
+    for (const [node, position] of part.nodePositions) result.nodePositions.set(node, { block: position.block + offset, offset: position.offset });
+  }
+  return result;
+}
+
+/**
+ * Keeps the blocks from `start` (inclusive) to `end` (inclusive) in document
+ * order. Used when the content root is the whole <body>, to drop menus before
+ * the headline and related-story lists after the last paragraph.
+ */
+export function sliceCollected(collected: Collected, start: Node | null, end: Node | null): Collected {
+  const keep: number[] = [];
+  collected.maps.forEach((map, index) => {
+    const first = map.nodes[0];
+    const last = map.nodes[map.nodes.length - 1];
+    if (!first || !last) return;
+    const beforeStart = start && start !== last && !start.contains(last) && Boolean(last.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const afterEnd = end && end !== first && !end.contains(first) && Boolean(first.compareDocumentPosition(end) & Node.DOCUMENT_POSITION_PRECEDING);
+    if (!beforeStart && !afterEnd) keep.push(index);
+  });
+  const result: Collected = { blocks: [], maps: [], nodePositions: new Map() };
+  const renumber = new Map(keep.map((old, index) => [old, index]));
+  for (const old of keep) {
+    result.blocks.push(collected.blocks[old]!);
+    result.maps.push(collected.maps[old]!);
+  }
+  for (const [node, position] of collected.nodePositions) {
+    const block = renumber.get(position.block);
+    if (block !== undefined) result.nodePositions.set(node, { block, offset: position.offset });
+  }
+  return result;
+}
+
+/** First and last prose paragraph inside an element, in document order, ignoring page headers, navigation and footers. */
+export function proseBounds(root: Element): [Element, Element] | null {
+  const inside = proseParagraphs(root.ownerDocument).filter(
+    (p) => root.contains(p) && !p.closest('nav, footer, [role="navigation"], [role="contentinfo"], [role="banner"]'),
+  );
+  return inside.length ? [inside[0]!, inside[inside.length - 1]!] : null;
 }

@@ -1,3 +1,4 @@
+import { waitingText } from '@/shared/engine-status';
 import {
   AlertCircle,
   AudioLines,
@@ -27,6 +28,7 @@ import { BookmarkList, HistoryList, QueueList } from '@/ui/components/Library';
 import { ModelBadge, modelAction } from '@/ui/components/ModelStatus';
 import { FloatingButtonToggle } from '@/ui/components/PermissionToggle';
 import { isActive, PlayerControls, setPlayback } from '@/ui/components/PlayerControls';
+import { UpdateBanner } from '@/ui/components/UpdateNotice';
 import { Button, Card, cx, Field, IconButton, Segmented, Select } from '@/ui/components/primitives';
 import { VoiceLibrary } from '@/ui/components/VoiceLibrary';
 import { useActiveTab, useModelState, usePlayback, useSettings, useTheme, useVoices } from '@/ui/hooks';
@@ -60,6 +62,7 @@ export function Popup() {
           <Settings2 size={16} />
         </IconButton>
       </header>
+      <UpdateBanner />
 
       <main className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         <AnimatePresence mode="wait" initial={false}>
@@ -263,7 +266,7 @@ function ListenTab() {
                   {active.error.message} <span className="opacity-70">({active.error.code})</span>
                 </p>
               ) : (
-                <p className="mt-2 line-clamp-3 min-h-[3.6em] font-serif text-[13.5px] leading-snug">{active.status === 'preparing' ? preparingText(model) : active.sentenceText}</p>
+                <p className="mt-2 line-clamp-3 min-h-[3.6em] font-serif text-[13.5px] leading-snug">{active.status === 'preparing' || (active.status === 'buffering' && !active.sentenceText) ? waitingText(active.status, model) : active.sentenceText}</p>
               )}
               <div className="mt-3">
                 <PlayerControls state={active} />
@@ -307,13 +310,6 @@ function ListenTab() {
   );
 }
 
-function preparingText(model: ReturnType<typeof useModelState>[0]): string {
-  if (model?.status === 'downloading' && model.progress) {
-    return `Downloading the Kokoro model… ${Math.floor((model.progress.loaded / Math.max(1, model.progress.total)) * 100)}%`;
-  }
-  if (model?.status === 'initializing') return 'Starting the speech engine…';
-  return 'Preparing voice…';
-}
 
 function VoiceOptions({ favorites }: { favorites: string[] }) {
   const voices = useVoices('kokoro');

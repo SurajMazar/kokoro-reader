@@ -12,7 +12,8 @@ import { formatBytes, formatDuration } from '@/shared/utils/format';
 import { createId } from '@/shared/utils/id';
 import { control, isActive, PlayerControls, setPlayback } from '@/ui/components/PlayerControls';
 import { Button, Card, cx, IconButton, Select } from '@/ui/components/primitives';
-import { usePlayback, useSettings, useTheme, useVoices } from '@/ui/hooks';
+import { waitingText } from '@/shared/engine-status';
+import { useModelState, usePlayback, useSettings, useTheme, useVoices } from '@/ui/hooks';
 
 type Loaded = { doc: ReadingDoc; start: number; attach: boolean };
 
@@ -89,6 +90,7 @@ function ArticleView({ doc, initialSentence }: { doc: ReadingDoc; initialSentenc
   const [exported, setExported] = useState<ExportResult | null>(null);
   const userScrolledAt = useRef(0);
   const ours = isActive(playback) && playback.docId === doc.id ? playback : null;
+  const [model] = useModelState();
   const current = ours ? ours.sentenceIndex : -1;
   const currentBlock = ours ? doc.sentences[current]?.blockId : undefined;
 
@@ -293,7 +295,7 @@ function ArticleView({ doc, initialSentence }: { doc: ReadingDoc; initialSentenc
           {ours ? (
             <>
               {ours.error && <p role="alert" className="mb-2 text-[12px] text-danger">{ours.error.message}</p>}
-              {ours.status === 'preparing' && <p className="mb-2 flex items-center gap-1.5 text-[12px] text-muted"><Loader2 size={13} className="animate-spin" /> Preparing the Kokoro engine…</p>}
+              {(ours.status === 'preparing' || ours.status === 'buffering') && <p className="mb-2 flex items-center gap-1.5 text-[12px] text-muted"><Loader2 size={13} className="animate-spin" /> {waitingText(ours.status, model)}</p>}
               <PlayerControls state={ours} size="lg" showVolume />
             </>
           ) : (
