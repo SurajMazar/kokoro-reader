@@ -1,5 +1,7 @@
 # Product walkthrough video
 
+Install the extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj).
+
 `kokoro-reader-walkthrough.mp4` (1280×720, H.264/AAC, 3:11, 19 chapters with MP4 chapter markers and an English subtitle track; captions are also burned in). Chapter times are listed in [CHAPTERS.md](CHAPTERS.md); `kokoro-reader-walkthrough.srt` holds the subtitles.
 
 ## How it was made

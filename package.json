@@ -20,11 +20,19 @@
     "build:espeak": "scripts/espeak/build.sh",
     "screenshots": "SCREENSHOTS=1 playwright test tests/e2e/screenshots.spec.ts",
     "benchmark": "BENCHMARK=1 playwright test tests/e2e/benchmark.spec.ts",
+    "site:dev": "vite --config site/vite.config.ts",
+    "site:build": "vite build --config site/vite.config.ts",
     "verify:speech": "QUALITY=1 playwright test tests/e2e/quality.spec.ts && python3 scripts/verify-speech.py"
   },
   "keywords": [],
-  "author": "",
+  "author": "Suraj Thapa",
   "license": "GPL-3.0-or-later",
+  "homepage": "https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SurajMazar/kokoro-reader.git"
+  },
+  "bugs": "https://github.com/SurajMazar/kokoro-reader/issues",
   "type": "module",
   "private": "true",
   "dependencies": {
@@ -47,6 +55,7 @@
     "@types/node": "24.9.2",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
+    "@types/three": "0.186.0",
     "@vitejs/plugin-react": "5.1.0",
     "eslint": "9.38.0",
     "eslint-plugin-react-hooks": "7.0.1",
@@ -55,6 +64,7 @@
     "jsdom": "27.0.1",
     "prettier": "3.6.2",
     "tailwindcss": "4.1.16",
+    "three": "0.186.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.46.2",
     "vite": "7.1.12",
@@ -62,9 +72,5 @@
   },
   "engines": {
     "node": ">=20.19"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/SurajMazar/kokoro-reader.git"
   }
 }

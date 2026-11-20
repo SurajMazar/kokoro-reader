@@ -1,4 +1,5 @@
 import { UpdatePanel } from '@/ui/components/UpdateNotice';
+import { STORE_URL } from '@/shared/updates';
 import {
   Accessibility,
   AudioLines,
@@ -277,6 +278,13 @@ function SectionBody({ section, settings, update }: { section: SectionId; settin
           <div className="space-y-2 py-3 text-[13px] leading-relaxed">
             <p>Version {chrome.runtime.getManifest().version}. A local-first reading assistant powered by Kokoro-82M, with Nepali voices from Piper.</p>
             <UpdatePanel />
+            <p>
+              Enjoying it?{' '}
+              <a href={STORE_URL} target="_blank" rel="noreferrer" className="text-accent underline">
+                Rate Kokoro Reader on the Chrome Web Store
+              </a>{' '}
+              or share the link with others.
+            </p>
             <p>
               Model: <code>{MODEL_REPOSITORY}</code> at revision <code>{MODEL_REVISION.slice(0, 12)}</code>, licensed {MODEL_LICENSE}. Kokoro-82M by hexgrad. ONNX export by onnx-community.
             </p>

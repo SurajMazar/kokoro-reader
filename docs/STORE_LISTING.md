@@ -1,5 +1,7 @@
 # Chrome Web Store listing
 
+**Live listing:** https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj (item ID `jjkkkegnnbehafabbhbolcdnfcjniamj`)
+
 **Name:** Kokoro Reader
 
 **Short description (≤132 chars):**

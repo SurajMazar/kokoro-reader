@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes are documented here. The project follows [Semantic Versioning](https://semver.org/): the extension's `manifest.json` version always equals `package.json`'s.
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj). All notable changes are documented here. The project follows [Semantic Versioning](https://semver.org/): the extension's `manifest.json` version always equals `package.json`'s.
 
 ## 0.3.0 — 2026-11-20
 

@@ -111,7 +111,9 @@ jobs:
           short=$(git rev-parse --short HEAD)
           notes="Automatic build of main at ${short} ($(date -u +%Y-%m-%dT%H:%MZ)).
 
-          Chrome Web Store: upload kokoro-reader-<version>.zip below as it is (manifest.json is at its root).
+          Install from the Chrome Web Store: https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj
+
+          Publishing to the Chrome Web Store: upload kokoro-reader-<version>.zip below as it is (manifest.json is at its root).
           Local install: unzip, open chrome://extensions, enable Developer mode, click Load unpacked and choose the folder.
 
           This is a development build. Versioned releases are published from v* tags."

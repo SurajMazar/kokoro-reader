@@ -2,7 +2,7 @@
 
 _Last updated: 20 November 2026_
 
-Kokoro Reader is designed so that what you read stays on your computer.
+Kokoro Reader ([Chrome Web Store](https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj)) is designed so that what you read stays on your computer.
 
 ## What happens to the text you listen to
 

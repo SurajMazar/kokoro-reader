@@ -2,7 +2,11 @@
 
 <h1 align="center">Kokoro Reader</h1>
 
-<p align="center">Listen to any webpage with natural AI speech, generated privately on your own computer.<br>A Chrome extension powered by <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro-82M</a> running locally through ONNX Runtime Web.</p>
+<p align="center">Listen to any webpage with natural AI speech, generated privately on your own computer.<br>A Chrome extension powered by <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro-82M</a> running locally through ONNX Runtime Web, in English and Nepali.</p>
+
+<p align="center"><a href="https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj"><b>Add to Chrome from the Chrome Web Store</b></a> · <a href="https://surajmazar.github.io/kokoro-reader/"><b>Explore the website</b></a></p>
+
+<p align="center"><a href="https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj"><img src="https://img.shields.io/chrome-web-store/v/jjkkkegnnbehafabbhbolcdnfcjniamj?label=Chrome%20Web%20Store" alt="Chrome Web Store version"></a> <a href="https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj"><img src="https://img.shields.io/chrome-web-store/users/jjkkkegnnbehafabbhbolcdnfcjniamj?label=users" alt="Chrome Web Store users"></a> <a href="https://github.com/SurajMazar/kokoro-reader/actions/workflows/ci.yml"><img src="https://github.com/SurajMazar/kokoro-reader/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a></p>
 
 <p align="center"><img src="docs/screenshots/in-page-player-light.png" width="820" alt="A web article being read aloud, with the spoken sentence highlighted and the Kokoro Reader player in the corner"></p>
 
@@ -51,7 +55,7 @@ Chrome never updates an unpacked extension. When a newer build exists, Kokoro Re
 
 ### Uploading to the Chrome Web Store
 
-Upload `kokoro-reader-<version>.zip` from [Releases](https://github.com/SurajMazar/kokoro-reader/releases) (or `release/` after `npm run package`) as it is. Its `manifest.json` is at the root. Do not unzip and re-compress it: macOS's *Compress* puts everything inside a folder, which the store rejects with "No manifest found in package".
+The published listing is [Kokoro Reader on the Chrome Web Store](https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj). To publish a new version, upload `kokoro-reader-<version>.zip` from [Releases](https://github.com/SurajMazar/kokoro-reader/releases) (or `release/` after `npm run package`) as it is. Its `manifest.json` is at the root. Do not unzip and re-compress it: macOS's *Compress* puts everything inside a folder, which the store rejects with "No manifest found in package".
 
 ### From source
 
@@ -114,6 +118,7 @@ src/
 tests/          unit, integration, e2e, fixture websites
 scripts/        manifest, validation, packaging, model pinning, espeak-ng WebAssembly build, icons, speech verification, walkthrough
 vendor/         espeak-ng (Nepali) compiled to WebAssembly by scripts/espeak/build.sh
+site/           the project website (Three.js), published to GitHub Pages by .github/workflows/pages.yml
 ```
 
 ## Tests

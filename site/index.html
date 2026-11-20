@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kokoro Reader: listen to the web, privately</title>
+  <meta name="description" content="A free Chrome extension that reads any webpage aloud with natural AI voices, in English and Nepali, generated entirely on your own computer.">
+  <meta name="theme-color" content="#0b0920">
+  <meta property="og:title" content="Kokoro Reader">
+  <meta property="og:description" content="Listen to any webpage with natural AI speech, in English and Nepali, generated privately on your own computer.">
+  <meta property="og:image" content="https://surajmazar.github.io/kokoro-reader/img/og.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="img/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <canvas id="world" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header class="bar">
+    <a class="brand" href="#top" aria-label="Kokoro Reader, back to the top"><img src="img/icon.png" alt="" width="28" height="28"> Kokoro Reader</a>
+    <nav aria-label="Sections">
+      <a href="#listen">Listen</a>
+      <a href="#nepali">नेपाली</a>
+      <a href="#private">Private</a>
+      <a href="#local">On-device</a>
+    </nav>
+    <a class="cta small" href="https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj">Add to Chrome</a>
+  </header>
+
+  <ol class="progress" aria-hidden="true">
+    <li></li><li></li><li></li><li></li><li></li><li></li>
+  </ol>
+
+  <main>
+    <section class="stop hero" id="top" data-stop="0">
+      <div class="card glass">
+        <p class="eyebrow">Free Chrome extension</p>
+        <h1>The web, <span class="shine">read aloud</span>.<br>Right on your computer.</h1>
+        <p class="lede">Kokoro Reader turns any page into natural speech, in English and Nepali. No cloud, no account: the voice runs on your own machine.</p>
+        <div class="voices" role="group" aria-label="Hear a voice">
+          <p class="hint">Tap a voice, or tap the glowing orb</p>
+          <div class="chips">
+            <button class="chip" data-voice="af_heart" aria-pressed="false"><span class="dot"></span>Heart <small>English (US)</small></button>
+            <button class="chip" data-voice="bf_emma" aria-pressed="false"><span class="dot"></span>Emma <small>English (UK)</small></button>
+            <button class="chip" data-voice="ne_chitwan" aria-pressed="false"><span class="dot"></span>Chitwan <small>नेपाली</small></button>
+            <button class="chip" data-voice="ne_google_05" aria-pressed="false"><span class="dot"></span>Speaker 5 <small>नेपाली</small></button>
+          </div>
+          <p class="caption" aria-live="polite"></p>
+        </div>
+        <div class="actions">
+          <a class="cta" href="https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj">Add to Chrome, it's free</a>
+          <a class="ghost" href="#listen">Take the tour ↓</a>
+        </div>
+      </div>
+      <p class="scroll-cue" aria-hidden="true"><span></span>Scroll to fly</p>
+    </section>
+
+    <section class="stop" id="listen" data-stop="1">
+      <div class="card glass right">
+        <p class="eyebrow">01 · Select. Click. Listen.</p>
+        <h2>A speaker appears next to anything you select.</h2>
+        <p>Click it and the text is read to you, sentence by sentence, with the spoken sentence highlighted on the page. Read whole pages, open long articles in a calm Smart Reader, queue them up like an audiobook.</p>
+        <ul class="ticks">
+          <li>28 English voices, speed 0.5× to 3× with natural pitch</li>
+          <li>Keeps playing when you switch tabs</li>
+          <li>Export any text as a WAV file</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="stop" id="nepali" data-stop="2">
+      <div class="card glass">
+        <p class="eyebrow">02 · नेपाली पनि</p>
+        <h2>Reads Nepali news, too.</h2>
+        <p>Nepali text is detected sentence by sentence and read by a Nepali voice, so a page that mixes Nepali and English just works. Try it on onlinekhabar, ekantipur, setopati or BBC Nepali.</p>
+        <p class="nepali" lang="ne">नमस्ते! म तपाईंलाई समाचार पढेर सुनाउँछु।</p>
+        <button class="chip solo" data-voice="ne_chitwan" aria-pressed="false"><span class="dot"></span>Hear Chitwan</button>
+      </div>
+    </section>
+
+    <section class="stop" id="private" data-stop="3">
+      <div class="card glass right">
+        <p class="eyebrow">03 · Private by design</p>
+        <h2>Your text never leaves your device.</h2>
+        <p>Speech is generated locally by open models. No accounts, no analytics, no tracking. The voice downloads once, is checked against a pinned checksum, and then works offline.</p>
+      </div>
+    </section>
+
+    <section class="stop" id="local" data-stop="4">
+      <div class="card glass">
+        <p class="eyebrow">04 · Runs on your machine</p>
+        <h2>Fast, on any computer.</h2>
+        <p>Kokoro-82M runs in multithreaded WebAssembly everywhere, and on the GPU through WebGPU where it is available, about four times faster than real time. Nepali voices run faster than real time on any CPU.</p>
+        <dl class="stats">
+          <div><dt>1.5 s</dt><dd>to first word</dd></div>
+          <div><dt>0 bytes</dt><dd>of your text sent anywhere</dd></div>
+          <div><dt>47</dt><dd>voices</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="stop finale" id="get" data-stop="5">
+      <div class="card glass center">
+        <h2>Ready to listen?</h2>
+        <p>Kokoro Reader is free and open source.</p>
+        <div class="actions center">
+          <a class="cta big" href="https://chromewebstore.google.com/detail/kokoro-reader/jjkkkegnnbehafabbhbolcdnfcjniamj">Add to Chrome</a>
+          <a class="ghost" href="https://github.com/SurajMazar/kokoro-reader">Source on GitHub</a>
+        </div>
+        <p class="fine">Voices: Kokoro-82M by hexgrad (Apache-2.0) · Nepali voices from Piper (CC0, CC-BY-SA-4.0) · <a href="https://github.com/SurajMazar/kokoro-reader/blob/main/PRIVACY.md">Privacy</a></p>
+      </div>
+    </section>
+  </main>
+
+  <audio id="voice" preload="none" crossorigin="anonymous"></audio>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
